@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Запись на тренировки</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --text: #111827;
+      --hint: #6b7280;
+      --accent: #2481cc;
+      --accent-soft: #e8f3fc;
+      --amber: #d97706;
+      --amber-bg: #fffbeb;
+      --amber-border: #fcd34d;
+      --green: #059669;
+      --green-bg: #ecfdf5;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 84px;
+    }
+    .header {
+      background: var(--card);
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .header h1 { margin: 0; font-size: 17px; font-weight: 700; }
+    .badge-role {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .container { max-width: 480px; margin: 0 auto; padding: 12px 14px; }
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--hint);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin: 14px 0 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .days-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .days-strip::-webkit-scrollbar { display: none; }
+    .day-pill {
+      min-width: 58px;
+      padding: 10px 8px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      text-align: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .day-pill.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .day-pill .dow { font-size: 11px; opacity: 0.8; }
+    .day-pill .dom { font-size: 16px; font-weight: 700; margin-top: 2px; }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .slot {
+      padding: 12px 6px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      text-align: center;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .slot.selected {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .slot.split-open {
+      background: var(--amber-bg);
+      border: 1.5px solid var(--amber-border);
+      color: var(--amber);
+    }
+    .slot.split-open.selected {
+      background: var(--amber);
+      color: #fff;
+      border-color: var(--amber);
+    }
+    .slot.busy {
+      background: #f9fafb;
+      color: #9ca3af;
+      border-color: #f3f4f6;
+      cursor: not-allowed;
+    }
+    .slot-sub { display: block; font-size: 10px; font-weight: 500; margin-top: 2px; }
+
+    .format-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .format-btn {
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+    .format-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger-outline { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+    .btn-sm { padding: 7px 10px; font-size: 12px; border-radius: 8px; width: auto; }
+    .btn-approve { background: var(--green-bg); color: var(--green); border: 1px solid #a7f3d0; }
+    .btn-del { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+
+    .booking-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .booking-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .booking-item:first-child { padding-top: 0; }
+
+    .coach-slot-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 30;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 10px 4px;
+      border: none;
+      background: none;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--hint);
+      cursor: pointer;
+    }
+    .nav-btn.active { color: var(--accent); }
+
+    .fixed-cta {
+      position: fixed;
+      bottom: 14px; left: 14px; right: 14px;
+      max-width: 452px;
+      margin: 0 auto;
+      z-index: 25;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+    .note-box {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      margin-top: 6px;
+      border-left: 3px solid var(--accent);
+    }
+    textarea, input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-family: inherit;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .loader { text-align: center; padding: 40px 16px; color: var(--hint); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 id="headerTitle">Тренировки</h1>
+    <span class="badge-role" id="roleBadge">Загрузка...</span>
+  </div>
+
+  <div class="container" id="app">
+    <div class="loader">Синхронизация расписания...</div>
+  </div>
+
+  <div id="ctaHolder"></div>
+  <div id="navHolder"></div>
+
+  <script>
+    // =========================================================
+    // НАСТРОЙКИ — ВСТАВЬ СВОИ ДАННЫЕ СЮДА ПЕРЕД ЗАГРУЗКОЙ НА GITHUB
+    // =========================================================
+    const CONFIG = {
+      GAS_WEB_APP_URL: 'ВСТАВЬ_СЮДА_URL_ИЗ_GOOGLE_APPS_SCRIPT',
+      COACH_TG_ID: 'ВСТАВЬ_СЮДА_СВОЙ_TELEGRAM_ID'
+    };
+
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const tgUser = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {
+      id: CONFIG.COACH_TG_ID,
+      first_name: 'Тренер',
+      username: ''
+    };
+
+    const HOURS = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
+
+    const state = {
+      loading: true,
+      isCoach: String(tgUser.id) === String(CONFIG.COACH_TG_ID),
+      clientRecord: null,
+      clients: [],
+      bookings: [],
+      journal: [],
+      blockedSlots: [],
+      days: buildDays(10),
+      selectedDate: '',
+      selectedTime: null,
+      selectedFormat: 'solo',
+      coachTab: 'schedule',
+      activeClientJournalId: null
+    };
+    state.selectedDate = state.days[0].iso;
+
+    function buildDays(count) {
+      const dowNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+      const list = [];
+      const now = new Date();
+      for (let i = 0; i < count; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        list.push({
+          iso: `${y}-${m}-${day}`,
+          dow: i === 0 ? 'Сегодня' : dowNames[d.getDay()],
+          dom: d.getDate()
+        });
+      }
+      return list;
+    }
+
+    async function apiGet() {
+      const url = `${CONFIG.GAS_WEB_APP_URL}?action=init&tg_id=${encodeURIComponent(tgUser.id)}`;
+      const res = await fetch(url);
+      return await res.json();
+    }
+
+    async function apiPost(payload) {
+      const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    }
+
+    async function loadData() {
+      try {
+        const data = await apiGet();
+        if (data && data.ok) {
+          state.isCoach = Boolean(data.isCoach);
+          state.clientRecord = data.client;
+          state.clients = data.clients || [];
+          state.bookings = data.bookings || [];
+          state.journal = data.journal || [];
+          state.blockedSlots = data.blockedSlots || [];
+
+          if (!state.isCoach && !state.clientRecord) {
+            const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+            const reg = await apiPost({
+              type: 'register_client',
+              tg_id: tgUser.id,
+              name: fullName,
+              username: tgUser.username ? '@' + tgUser.username : ''
+            });
+            state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
+          }
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки:', e);
+      } finally {
+        state.loading = false;
+        render();
+      }
+    }
+
+    function hoursUntil(dateStr, timeStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const target = new Date(y, m - 1, d, hh, mm || 0, 0);
+      return (target.getTime() - Date.now()) / (1000 * 60 * 60);
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      const ctaHolder = document.getElementById('ctaHolder');
+      const navHolder = document.getElementById('navHolder');
+      const roleBadge = document.getElementById('roleBadge');
+
+      ctaHolder.innerHTML = '';
+      navHolder.innerHTML = '';
+
+      if (state.loading) return;
+
+      if (state.isCoach) {
+        roleBadge.textContent = 'Тренер';
+        renderCoach(app, navHolder);
+      } else {
+        roleBadge.textContent = 'Клиент';
+        renderClient(app, ctaHolder);
+      }
+    }
+
+    function renderClient(app, ctaHolder) {
+      if (!state.clientRecord || state.clientRecord.status !== 'approved') {
+        app.innerHTML = `
+          <div class="card" style="text-align:center; padding:24px 16px;">
+            <div style="font-size:32px; margin-bottom:8px;">⏳</div>
+            <div style="font-weight:700; font-size:16px;">Заявка отправлена тренеру</div>
+            <p style="font-size:13px; color:var(--hint); line-height:1.45;">
+              Как только тренер подтвердит доступ, здесь откроется расписание для записи на тренировки.
+            </p>
+            <button class="btn btn-primary" onclick="location.reload()">Обновить статус</button>
+          </div>
+        `;
+        return;
+      }
+
+      const myBookings = state.bookings.filter(b => String(b.client_tg_id) === String(tgUser.id));
+      let html = '';
+
+      if (myBookings.length > 0) {
+        html += `<div class="section-title">Мои записи</div><div class="card">`;
+        myBookings.forEach(b => {
+          const left = hoursUntil(b.date, b.time);
+          const canCancel = left >= 12;
+          html += `
+            <div class="booking-item">
+              <div>
+                <div style="font-weight:700; font-size:14px;">${b.date} в ${b.time}</div>
+                <div style="font-size:12px; color:var(--hint);">
+                  ${b.format === 'split' ? '👥 Сплит-тренировка' : '👤 Персональная'}
+                </div>
+                ${!canCancel ? `<div style="font-size:11px; color:var(--danger); margin-top:2px;">Отмена недоступна (менее 12 ч)</div>` : ''}
+              </div>
+              ${canCancel
+                ? `<button class="btn btn-danger-outline btn-sm" onclick="cancelBooking('${b.id}')">Отменить</button>`
+                : `<span style="font-size:18px;">🔒</span>`
+              }
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      html += `
+        <div class="section-title">Выберите день</div>
+        <div class="days-strip">
+          ${state.days.map(d => `
+            <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
+              <div class="dow">${d.dow}</div>
+              <div class="dom">${d.dom}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="section-title">Свободное время</div>
+        <div class="slots-grid">
+      `;
+
+      HOURS.forEach(h => {
+        const isBlocked = state.blockedSlots.some(s => s.date === state.selectedDate && s.time === h);
+        const slotBookings = state.bookings.filter(b => b.date === state.selectedDate && b.time === h);
+        const hasSolo = slotBookings.some(b => b.format !== 'split');
+        const splitCount = slotBookings.filter(b => b.format === 'split').length;
+        const alreadyMine = slotBookings.some(b => String(b.client_tg_id) === String(tgUser.id));
+
+        if (isBlocked || hasSolo || splitCount >= 2 || alreadyMine) {
+          html += `<div class="slot busy">${h}<span class="slot-sub">${alreadyMine ? 'Вы записаны' : 'Занято'}</span></div>`;
+        } else if (splitCount === 1) {
+          const sel = state.selectedTime === h ? 'selected' : '';
+          html += `<div class="slot split-open ${sel}" onclick="selectSlot('${h}', true)">${h}<span class="slot-sub">👥 Сплит 1/2</span></div>`;
+        } else {
+          const sel = state.selectedTime === h ? 'selected' : '';
+          html += `<div class="slot ${sel}" onclick="selectSlot('${h}', false)">${h}<span class="slot-sub">Свободно</span></div>`;
+        }
+      });
+
+      html += `</div>`;
+
+      if (state.selectedTime) {
+        const slotBookings = state.bookings.filter(b => b.date === state.selectedDate && b.time === state.selectedTime);
+        const isJoiningSplit = slotBookings.some(b => b.format === 'split');
+
+        if (!isJoiningSplit) {
+          html += `
+            <div class="card" style="margin-top:12px;">
+              <div style="font-size:13px; font-weight:700;">Формат тренировки в ${state.selectedTime}</div>
+              <div class="format-row">
+                <div class="format-btn ${state.selectedFormat === 'solo' ? 'active' : ''}" onclick="setFormat('solo')">👤 Персональная</div>
+                <div class="format-btn ${state.selectedFormat === 'split' ? 'active' : ''}" onclick="setFormat('split')">👥 Сплит (оставить 1 место)</div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="card" style="margin-top:12px; background:var(--amber-bg); border-color:var(--amber-border);">
+              <div style="font-size:13px; font-weight:700; color:var(--amber);">👥 Присоединение к сплиту (2-е место)</div>
+              <div style="font-size:12px; color:var(--hint); margin-top:2px;">Слот на ${state.selectedTime} будет закрыт после вашей записи.</div>
+            </div>
+          `;
+        }
+
+        ctaHolder.innerHTML = `
+          <div class="fixed-cta">
+            <button class="btn btn-primary" onclick="bookNow()">Записаться на ${state.selectedDate} в ${state.selectedTime}</button>
+          </div>
+        `;
+      }
+
+      app.innerHTML = html;
+    }
+
+    function renderCoach(app, navHolder) {
+      navHolder.innerHTML = `
+        <div class="bottom-nav">
+          <button class="nav-btn ${state.coachTab === 'schedule' ? 'active' : ''}" onclick="setCoachTab('schedule')">📅 Расписание</button>
+          <button class="nav-btn ${state.coachTab === 'clients' ? 'active' : ''}" onclick="setCoachTab('clients')">👥 Клиенты и журнал</button>
+        </div>
+      `;
+
+      if (state.coachTab === 'schedule') {
+        let html = `
+          <div class="card" style="background:var(--accent-soft); border-color:#bfdbfe; padding:10px 12px;">
+            <div style="font-size:12px; font-weight:700; color:var(--accent);">📅 Google Календарь подключен</div>
+            <div style="font-size:11px; color:var(--hint); margin-top:2px;">Новые записи добавляются в календарь, а личные события закрывают окна автоматически.</div>
+          </div>
+          <div class="days-strip">
+            ${state.days.map(d => `
+              <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
+                <div class="dow">${d.dow}</div>
+                <div class="dom">${d.dom}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="section-title">Слоты на ${state.selectedDate}</div>
+        `;
+
+        HOURS.forEach(h => {
+          const blocked = state.blockedSlots.find(s => s.date === state.selectedDate && s.time === h);
+          const slotBookings = state.bookings.filter(b => b.date === state.selectedDate && b.time === h);
+
+          if (slotBookings.length > 0) {
+            const names = slotBookings.map(b => `${b.client_name} (${b.format === 'split' ? 'Сплит' : 'Перс.'})`).join(', ');
+            html += `
+              <div class="coach-slot-row" style="border-left:4px solid var(--accent);">
+                <div>
+                  <div style="font-weight:700; font-size:14px;">${h} — ${names}</div>
+                  <div style="font-size:11px; color:var(--hint);">Записано: ${slotBookings.length} чел.</div>
+                </div>
+                <button class="btn btn-del btn-sm" onclick="cancelBooking('${slotBookings[0].id}', true)">Отменить</button>
+              </div>
+            `;
+          } else if (blocked) {
+            const isGcal = blocked.source === 'gcal';
+            html += `
+              <div class="coach-slot-row" style="background:#f9fafb;">
+                <div>
+                  <div style="font-weight:700; font-size:14px; color:var(--hint);">${h} — 🔒 ${blocked.reason || 'Закрыто'}</div>
+                  <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : 'Закрыто вручную'}</div>
+                </div>
+                ${!isGcal ? `<button class="btn btn-approve btn-sm" onclick="toggleBlock('${h}')">Открыть</button>` : ''}
+              </div>
+            `;
+          } else {
+            html += `
+              <div class="coach-slot-row">
+                <div style="font-weight:700; font-size:14px;">${h} — <span style="color:var(--green); font-weight:500;">Свободно</span></div>
+                <button class="btn btn-sm" style="background:#f3f4f6;" onclick="toggleBlock('${h}')">🔒 Личное время</button>
+              </div>
+            `;
+          }
+        });
+
+        app.innerHTML = html;
+      } else {
+        const pending = state.clients.filter(c => c.status === 'pending');
+        const approved = state.clients.filter(c => c.status === 'approved');
+        let html = '';
+
+        if (pending.length > 0) {
+          html += `<div class="section-title">Ожидают одобрения (${pending.length})</div>`;
+          pending.forEach(c => {
+            html += `
+              <div class="card" style="border-color:var(--amber-border); background:var(--amber-bg);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div style="font-weight:700;">${c.name}</div>
+                    <div style="font-size:12px; color:var(--hint);">${c.username || 'ID: ' + c.tg_id}</div>
+                  </div>
+                  <div style="display:flex; gap:6px;">
+                    <button class="btn btn-approve btn-sm" onclick="moderateClient('${c.tg_id}', 'approve')">✓ Одобрить</button>
+                    <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">✕</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        html += `<div class="section-title">Активные клиенты (${approved.length})</div>`;
+        if (approved.length === 0) {
+          html += `<div class="card" style="color:var(--hint); font-size:13px;">Пока нет одобренных клиентов.</div>`;
+        }
+
+        approved.forEach(c => {
+          const clientNotes = state.journal.filter(j => String(j.client_tg_id) === String(c.tg_id));
+          const isOpen = String(state.activeClientJournalId) === String(c.tg_id);
+
+          html += `
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <div style="font-weight:700; font-size:15px;">${c.name}</div>
+                  <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits || 0}</b> · ${c.username || ''}</div>
+                </div>
+                <div style="display:flex; gap:6px;">
+                  <button class="btn btn-sm" style="background:var(--accent-soft); color:var(--accent);" onclick="toggleJournal('${c.tg_id}')">📓 Журнал</button>
+                  <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">🗑</button>
+                </div>
+              </div>
+              ${isOpen ? `
+                <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
+                  <div style="font-size:12px; font-weight:700; color:var(--hint);">Заметки тренера (клиент не видит):</div>
+                  ${clientNotes.length === 0 ? `<div style="font-size:12px; color:var(--hint); margin-top:4px;">Записей пока нет</div>` : ''}
+                  ${clientNotes.map(n => `<div class="note-box"><b>${n.date}:</b> ${n.note}</div>`).join('')}
+                  <textarea id="note_${c.tg_id}" rows="2" placeholder="Что делали на тренировке, акценты..."></textarea>
+                  <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveNote('${c.tg_id}', '${c.name.replace(/'/g, '')}')">Сохранить заметку</button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        });
+
+        app.innerHTML = html;
+      }
+    }
+
+    function selectDate(iso) { state.selectedDate = iso; state.selectedTime = null; render(); }
+    function selectSlot(time, forceSplit) {
+      state.selectedTime = time;
+      if (forceSplit) state.selectedFormat = 'split';
+      render();
+    }
+    function setFormat(fmt) { state.selectedFormat = fmt; render(); }
+    function setCoachTab(tab) { state.coachTab = tab; render(); }
+    function toggleJournal(id) {
+      state.activeClientJournalId = String(state.activeClientJournalId) === String(id) ? null : id;
+      render();
+    }
+
+    async function bookNow() {
+      const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+      state.loading = true; render();
+      await apiPost({
+        type: 'create_booking',
+        date: state.selectedDate,
+        time: state.selectedTime,
+        format: state.selectedFormat,
+        client_tg_id: tgUser.id,
+        client_name: fullName
+      });
+      state.selectedTime = null;
+      await loadData();
+    }
+
+    async function cancelBooking(bookingId, forceByCoach = false) {
+      state.loading = true; render();
+      await apiPost({ type: 'cancel_booking', booking_id: bookingId, force_by_coach: forceByCoach });
+      await loadData();
+    }
+
+    async function toggleBlock(time) {
+      state.loading = true; render();
+      await apiPost({ type: 'toggle_block_slot', date: state.selectedDate, time: time, reason: 'Личные дела' });
+      await loadData();
+    }
+
+    async function moderateClient(targetId, decision) {
+      state.loading = true; render();
+      await apiPost({ type: 'moderate_client', target_tg_id: targetId, decision: decision });
+      await loadData();
+    }
+
+    async function saveNote(clientId, clientName) {
+      const el = document.getElementById('note_' + clientId);
+      const text = el && el.value.trim();
+      if (!text) return;
+      state.loading = true; render();
+      await apiPost({ type: 'add_journal_note', client_tg_id: clientId, client_name: clientName, note: text });
+      await loadData();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
