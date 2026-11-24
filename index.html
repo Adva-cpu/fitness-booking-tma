@@ -332,36 +332,51 @@
       return await res.json();
     }
 
-    async function loadData() {
-      try {
-        const data = await apiGet();
-        if (data && data.ok) {
-          state.isCoach = Boolean(data.isCoach);
-          state.clientRecord = data.client;
-          state.clients = data.clients || [];
-          state.bookings = data.bookings || [];
-          state.journal = data.journal || [];
-          state.blockedSlots = data.blockedSlots || [];
+  async function loadData() {
+  state.loading = true;
+  state.errorMsg = '';
+  render();
 
-          if (!state.isCoach && !state.clientRecord) {
-            const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
-            const reg = await apiPost({
-              type: 'register_client',
-              tg_id: tgUser.id,
-              name: fullName,
-              username: tgUser.username ? '@' + tgUser.username : ''
-            });
-            state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
-          }
-        }
-      } catch (e) {
-        console.error('Ошибка загрузки:', e);
-      } finally {
-        state.loading = false;
-        render();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const url = `${CONFIG.GAS_WEB_APP_URL}?action=init&tg_id=${encodeURIComponent(tgUser.id)}`;
+    const res = await fetch(url, { signal: controller.signal });
+    const data = await res.json();
+
+    if (data && data.ok) {
+      state.isCoach = Boolean(data.isCoach);
+      state.clientRecord = data.client;
+      state.clients = data.clients || [];
+      state.bookings = data.bookings || [];
+      state.journal = data.journal || [];
+      state.blockedSlots = data.blockedSlots || [];
+
+      if (!state.isCoach && !state.clientRecord) {
+        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+        const reg = await apiPost({
+          type: 'register_client',
+          tg_id: tgUser.id,
+          name: fullName,
+          username: tgUser.username ? '@' + tgUser.username : ''
+        });
+        state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
       }
+    } else {
+      state.errorMsg = 'Сервер расписания вернул ошибку.';
     }
-
+  } catch (e) {
+    console.error('Ошибка загрузки:', e);
+    state.errorMsg = e.name === 'AbortError'
+      ? 'Сервер Google отвечает слишком долго (таймаут 8 сек).'
+      : 'Не удалось связаться с сервером расписания.';
+  } finally {
+    clearTimeout(timer);
+    state.loading = false;
+    render();
+  }
+}
     function hoursUntil(dateStr, timeStr) {
       const [y, m, d] = dateStr.split('-').map(Number);
       const [hh, mm] = String(timeStr).split(':').map(Number);
