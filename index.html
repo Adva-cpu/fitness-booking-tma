@@ -436,20 +436,20 @@
       return (target.getTime() - Date.now()) / (1000 * 60 * 60);
     }
 
-    function getOverlappingItems(dateStr, slotTime) {
-      const overlappingBookings = state.bookings.filter(b =>
-        b.date === dateStr &&
-        b.status !== 'cancelled' &&
-        intervalsOverlap(slotTime, b.time, SESSION_DURATION_MIN, Number(b.duration) || SESSION_DURATION_MIN)
-      );
+   function getOverlappingItems(dateStr, slotTime) {
+  const overlappingBookings = state.bookings.filter(b =>
+    b.date === dateStr &&
+    b.status !== 'cancelled' &&
+    intervalsOverlap(slotTime, b.time, SESSION_DURATION_MIN, Number(b.duration) || SESSION_DURATION_MIN)
+  );
 
-      const overlappingBlocks = state.blockedSlots.filter(s =>
-        s.date === dateStr &&
-        intervalsOverlap(slotTime, s.time, SESSION_DURATION_MIN, Number(s.duration) || SESSION_DURATION_MIN)
-      );
+  const overlappingBlocks = state.blockedSlots.filter(s =>
+    s.date === dateStr &&
+    intervalsOverlap(slotTime, s.time, SESSION_DURATION_MIN, Number(s.duration) || SESSION_DURATION_MIN)
+  );
 
-      return { overlappingBookings, overlappingBlocks };
-    }
+  return { overlappingBookings, overlappingBlocks };
+}
 
     function render() {
       const app = document.getElementById('app');
@@ -599,132 +599,156 @@
     }
 
     function renderCoach(app, navHolder) {
-      navHolder.innerHTML = `
-        <div class="bottom-nav">
-          <button class="nav-btn ${state.coachTab === 'schedule' ? 'active' : ''}" onclick="setCoachTab('schedule')">📅 Расписание</button>
-          <button class="nav-btn ${state.coachTab === 'clients' ? 'active' : ''}" onclick="setCoachTab('clients')">👥 Клиенты и журнал</button>
+  navHolder.innerHTML = `
+    <div class="bottom-nav">
+      <button class="nav-btn ${state.coachTab === 'schedule' ? 'active' : ''}" onclick="setCoachTab('schedule')">📅 Расписание</button>
+      <button class="nav-btn ${state.coachTab === 'clients' ? 'active' : ''}" onclick="setCoachTab('clients')">👥 Клиенты и журнал</button>
+    </div>
+  `;
+
+  if (state.coachTab === 'schedule') {
+    let html = `
+      <div class="card" style="background:var(--accent-soft); border-color:var(--accent-border); padding:10px 12px;">
+        <div style="font-size:12px; font-weight:700; color:var(--accent);">📅 Слоты 07:30–22:00 (шаг 30 мин, длительность 60 мин)</div>
+        <div style="font-size:11px; color:var(--hint); margin-top:2px;">Тренировка длится 60 минут и перекрывает соседний 30-минутный старт.</div>
+      </div>
+      <div class="days-strip">
+        ${state.days.map(d => `
+          <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
+            <div class="dow">${d.dow}</div>
+            <div class="dom">${d.dom}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="section-title">Слоты на ${state.selectedDate}</div>
+    `;
+
+    SLOTS.forEach(slotTime => {
+      const slotStart = timeToMinutes(slotTime);
+      const slotEnd = slotStart + SESSION_DURATION_MIN;
+      const endTime = minutesToTime(slotEnd);
+      const { overlappingBookings, overlappingBlocks } = getOverlappingItems(state.selectedDate, slotTime);
+
+      const exactBookings = overlappingBookings.filter(b => b.time === slotTime);
+      const exactBlock = overlappingBlocks.find(s => s.time === slotTime);
+
+      if (exactBookings.length > 0) {
+        const names = exactBookings.map(b => `${b.client_name} (${b.format === 'split' ? 'Сплит' : 'Перс.'})`).join(', ');
+        html += `
+          <div class="coach-slot-row" style="border-left:4px solid var(--accent);">
+            <div>
+              <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — ${names}</div>
+              <div style="font-size:11px; color:var(--hint);">Записано: ${exactBookings.length} чел.</div>
+            </div>
+            <button class="btn btn-del btn-sm" onclick="cancelBooking('${exactBookings[0].id}', true)">Отменить</button>
+          </div>
+        `;
+      } else if (overlappingBookings.length > 0) {
+        const parentBooking = overlappingBookings[0];
+        html += `
+          <div class="coach-slot-row" style="background:var(--card-elevated); opacity:0.85;">
+            <div>
+              <div style="font-weight:600; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — Перекрыто (${parentBooking.client_name} с ${parentBooking.time})</div>
+              <div style="font-size:11px; color:var(--hint);">Старт в ${slotTime} недоступен из-за 60-минутной записи</div>
+            </div>
+          </div>
+        `;
+      } else if (exactBlock) {
+        const isGcal = exactBlock.source === 'gcal';
+        const bEnd = minutesToTime(timeToMinutes(exactBlock.time) + (Number(exactBlock.duration) || SESSION_DURATION_MIN));
+        html += `
+          <div class="coach-slot-row" style="background:var(--card-elevated);">
+            <div>
+              <div style="font-weight:700; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — 🔒 ${exactBlock.reason || 'Закрыто'} (${exactBlock.time}–${bEnd})</div>
+              <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : 'Закрыто вручную'}</div>
+            </div>
+            ${!isGcal ? `<button class="btn btn-approve btn-sm" onclick="toggleBlock('${slotTime}')">Открыть</button>` : ''}
+          </div>
+        `;
+      } else if (overlappingBlocks.length > 0) {
+        const parentBlock = overlappingBlocks[0];
+        const isGcal = parentBlock.source === 'gcal';
+        html += `
+          <div class="coach-slot-row" style="background:var(--card-elevated); opacity:0.85;">
+            <div>
+              <div style="font-weight:600; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — Перекрыто (${parentBlock.reason || 'Занято'} с ${parentBlock.time})</div>
+              <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : 'Перекрыто соседним слотом'}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="coach-slot-row">
+            <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — <span style="color:var(--green); font-weight:500;">Свободно</span></div>
+            <button class="btn btn-neutral btn-sm" onclick="toggleBlock('${slotTime}')">🔒 Личное время</button>
+          </div>
+        `;
+      }
+    });
+
+    app.innerHTML = html;
+  } else {
+    const pending = state.clients.filter(c => c.status === 'pending');
+    const approved = state.clients.filter(c => c.status === 'approved');
+    let html = '';
+
+    if (pending.length > 0) {
+      html += `<div class="section-title">Ожидают одобрения (${pending.length})</div>`;
+      pending.forEach(c => {
+        html += `
+          <div class="card" style="border-color:var(--amber-border); background:var(--amber-bg);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:700;">${c.name}</div>
+                <div style="font-size:12px; color:var(--hint);">${c.username || 'ID: ' + c.tg_id}</div>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-approve btn-sm" onclick="moderateClient('${c.tg_id}', 'approve')">✓ Одобрить</button>
+                <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">✕</button>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    html += `<div class="section-title">Активные клиенты (${approved.length})</div>`;
+    if (approved.length === 0) {
+      html += `<div class="card" style="color:var(--hint); font-size:13px;">Пока нет одобренных клиентов.</div>`;
+    }
+
+    approved.forEach(c => {
+      const clientNotes = state.journal.filter(j => String(j.client_tg_id) === String(c.tg_id));
+      const isOpen = String(state.activeClientJournalId) === String(c.tg_id);
+
+      html += `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:700; font-size:15px;">${c.name}</div>
+              <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits || 0}</b> · ${c.username || ''}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-sm" style="background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent-border);" onclick="toggleJournal('${c.tg_id}')">📓 Журнал</button>
+              <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">🗑</button>
+            </div>
+          </div>
+          ${isOpen ? `
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
+              <div style="font-size:12px; font-weight:700; color:var(--hint);">Заметки тренера (клиент не видит):</div>
+              ${clientNotes.length === 0 ? `<div style="font-size:12px; color:var(--hint); margin-top:4px;">Записей пока нет</div>` : ''}
+              ${clientNotes.map(n => `<div class="note-box"><b>${n.date}:</b> ${n.note}</div>`).join('')}
+              <textarea id="note_${c.tg_id}" rows="2" placeholder="Что делали на тренировке, акценты..."></textarea>
+              <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveNote('${c.tg_id}', '${String(c.name || '').replace(/'/g, '')}')">Сохранить заметку</button>
+            </div>
+          ` : ''}
         </div>
       `;
+    });
 
-      if (state.coachTab === 'schedule') {
-        let html = `
-          <div class="card" style="background:var(--accent-soft); border-color:var(--accent-border); padding:10px 12px;">
-            <div style="font-size:12px; font-weight:700; color:var(--accent);">📅 Слоты 07:30–22:00 (шаг 30 мин, длительность 60 мин)</div>
-            <div style="font-size:11px; color:var(--hint); margin-top:2px;">Любая запись или блокировка на 60 минут автоматически перекрывает соседний 30-минутный слот.</div>
-          </div>
-          <div class="days-strip">
-            ${state.days.map(d => `
-              <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
-                <div class="dow">${d.dow}</div>
-                <div class="dom">${d.dom}</div>
-              </div>
-            `).join('')}
-          </div>
-          <div class="section-title">Слоты на ${state.selectedDate}</div>
-        `;
-
-        SLOTS.forEach(slotTime => {
-          const endTime = minutesToTime(timeToMinutes(slotTime) + SESSION_DURATION_MIN);
-          const { overlappingBookings, overlappingBlocks } = getOverlappingItems(state.selectedDate, slotTime);
-          const exactBlock = overlappingBlocks.find(s => s.time === slotTime);
-          const anyBlock = overlappingBlocks[0];
-
-          if (overlappingBookings.length > 0) {
-            const names = overlappingBookings.map(b => `${b.client_name} (${b.format === 'split' ? 'Сплит' : 'Перс.'}, с ${b.time})`).join(', ');
-            const cancellableBooking = overlappingBookings.find(b => b.time === slotTime) || overlappingBookings[0];
-            html += `
-              <div class="coach-slot-row" style="border-left:4px solid var(--accent);">
-                <div>
-                  <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — ${names}</div>
-                  <div style="font-size:11px; color:var(--hint);">Занято записями: ${overlappingBookings.length} чел.</div>
-                </div>
-                <button class="btn btn-del btn-sm" onclick="cancelBooking('${cancellableBooking.id}', true)">Отменить</button>
-              </div>
-            `;
-          } else if (anyBlock) {
-            const isGcal = anyBlock.source === 'gcal';
-            html += `
-              <div class="coach-slot-row" style="background:var(--card-elevated);">
-                <div>
-                  <div style="font-weight:700; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — 🔒 ${anyBlock.reason || 'Закрыто'}</div>
-                  <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : `Закрыто с ${anyBlock.time}`}</div>
-                </div>
-                ${!isGcal && exactBlock ? `<button class="btn btn-approve btn-sm" onclick="toggleBlock('${slotTime}')">Открыть</button>` : ''}
-              </div>
-            `;
-          } else {
-            html += `
-              <div class="coach-slot-row">
-                <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — <span style="color:var(--green); font-weight:500;">Свободно</span></div>
-                <button class="btn btn-neutral btn-sm" onclick="toggleBlock('${slotTime}')">🔒 Личное время</button>
-              </div>
-            `;
-          }
-        });
-
-        app.innerHTML = html;
-      } else {
-        const pending = state.clients.filter(c => c.status === 'pending');
-        const approved = state.clients.filter(c => c.status === 'approved');
-        let html = '';
-
-        if (pending.length > 0) {
-          html += `<div class="section-title">Ожидают одобрения (${pending.length})</div>`;
-          pending.forEach(c => {
-            html += `
-              <div class="card" style="border-color:var(--amber-border); background:var(--amber-bg);">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <div>
-                    <div style="font-weight:700;">${c.name}</div>
-                    <div style="font-size:12px; color:var(--hint);">${c.username || 'ID: ' + c.tg_id}</div>
-                  </div>
-                  <div style="display:flex; gap:6px;">
-                    <button class="btn btn-approve btn-sm" onclick="moderateClient('${c.tg_id}', 'approve')">✓ Одобрить</button>
-                    <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">✕</button>
-                  </div>
-                </div>
-              </div>
-            `;
-          });
-        }
-
-        html += `<div class="section-title">Активные клиенты (${approved.length})</div>`;
-        if (approved.length === 0) {
-          html += `<div class="card" style="color:var(--hint); font-size:13px;">Пока нет одобренных клиентов.</div>`;
-        }
-
-        approved.forEach(c => {
-          const clientNotes = state.journal.filter(j => String(j.client_tg_id) === String(c.tg_id));
-          const isOpen = String(state.activeClientJournalId) === String(c.tg_id);
-
-          html += `
-            <div class="card">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-weight:700; font-size:15px;">${c.name}</div>
-                  <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits || 0}</b> · ${c.username || ''}</div>
-                </div>
-                <div style="display:flex; gap:6px;">
-                  <button class="btn btn-sm" style="background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent-border);" onclick="toggleJournal('${c.tg_id}')">📓 Журнал</button>
-                  <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">🗑</button>
-                </div>
-              </div>
-              ${isOpen ? `
-                <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
-                  <div style="font-size:12px; font-weight:700; color:var(--hint);">Заметки тренера (клиент не видит):</div>
-                  ${clientNotes.length === 0 ? `<div style="font-size:12px; color:var(--hint); margin-top:4px;">Записей пока нет</div>` : ''}
-                  ${clientNotes.map(n => `<div class="note-box"><b>${n.date}:</b> ${n.note}</div>`).join('')}
-                  <textarea id="note_${c.tg_id}" rows="2" placeholder="Что делали на тренировке, акценты..."></textarea>
-                  <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveNote('${c.tg_id}', '${String(c.name || '').replace(/'/g, '')}')">Сохранить заметку</button>
-                </div>
-              ` : ''}
-            </div>
-          `;
-        });
-
-        app.innerHTML = html;
-      }
-    }
+    app.innerHTML = html;
+  }
+}
 
     function selectDate(iso) { state.selectedDate = iso; state.selectedTime = null; render(); }
     function selectSlot(time, forceSplit) {
