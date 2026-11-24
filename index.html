@@ -310,7 +310,60 @@
     function minutesToTime(mins) {
       const h = Math.floor(mins / 60);
       const m = mins % 60;
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; }  // Слоты с 07:30 с шагом 30 минут так, чтобы 60-минутная тренировка заканчивалась не позже 23:00 function buildSlots(startTime = '07:30', closingTime = '23:00', durationMin = SESSION_DURATION_MIN, stepMin = STEP_MIN) { const start = timeToMinutes(startTime); const lastAllowedStart = timeToMinutes(closingTime) - durationMin; const list = []; for (let t = start; t <= lastAllowedStart; t += stepMin) { list.push(minutesToTime(t)); } return list; }  const SLOTS = buildSlots('07:30', '23:00', SESSION_DURATION_MIN, STEP_MIN);  // Пересекаются ли два 60-минутных интервала [startA, startA + 60) и [startB, startB + 60) function intervalsOverlap(startTimeA, startTimeB, durationA = SESSION_DURATION_MIN, durationB = SESSION_DURATION_MIN) { const a1 = timeToMinutes(startTimeA); const a2 = a1 + durationA; const b1 = timeToMinutes(startTimeB); const b2 = b1 + durationB; return a1 < b2 && a2 > b1; }  const state = { loading: true, isCoach: String(tgUser.id) === String(CONFIG.COACH_TG_ID), clientRecord: null, clients: [], bookings: [], journal: [], blockedSlots: [], days: buildDays(10), selectedDate: '', selectedTime: null, selectedFormat: 'solo', coachTab: 'schedule', activeClientJournalId: null }; state.selectedDate = state.days[0].iso;  function buildDays(count) { const dowNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб']; const list = []; const now = new Date(); for (let i = 0; i < count; i++) { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i); const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); list.push({ iso: `${y}-${m}-${day}`,
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    // Слоты с 07:30 с шагом 30 минут так, чтобы 60-минутная тренировка заканчивалась не позже 23:00
+    function buildSlots(startTime = '07:30', closingTime = '23:00', durationMin = SESSION_DURATION_MIN, stepMin = STEP_MIN) {
+      const start = timeToMinutes(startTime);
+      const lastAllowedStart = timeToMinutes(closingTime) - durationMin;
+      const list = [];
+      for (let t = start; t <= lastAllowedStart; t += stepMin) {
+        list.push(minutesToTime(t));
+      }
+      return list;
+    }
+
+    const SLOTS = buildSlots('07:30', '23:00', SESSION_DURATION_MIN, STEP_MIN);
+
+    // Пересекаются ли два 60-минутных интервала [startA, startA + 60) и [startB, startB + 60)
+    function intervalsOverlap(startTimeA, startTimeB, durationA = SESSION_DURATION_MIN, durationB = SESSION_DURATION_MIN) {
+      const a1 = timeToMinutes(startTimeA);
+      const a2 = a1 + durationA;
+      const b1 = timeToMinutes(startTimeB);
+      const b2 = b1 + durationB;
+      return a1 < b2 && a2 > b1;
+    }
+
+    const state = {
+      loading: true,
+      errorMsg: '',
+      isCoach: String(tgUser.id) === String(CONFIG.COACH_TG_ID),
+      clientRecord: null,
+      clients: [],
+      bookings: [],
+      journal: [],
+      blockedSlots: [],
+      days: buildDays(10),
+      selectedDate: '',
+      selectedTime: null,
+      selectedFormat: 'solo',
+      coachTab: 'schedule',
+      activeClientJournalId: null
+    };
+    state.selectedDate = state.days[0].iso;
+
+    function buildDays(count) {
+      const dowNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+      const list = [];
+      const now = new Date();
+      for (let i = 0; i < count; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        list.push({
+          iso: `${y}-${m}-${day}`,
           dow: i === 0 ? 'Сегодня' : dowNames[d.getDay()],
           dom: d.getDate()
         });
@@ -318,9 +371,9 @@
       return list;
     }
 
-    async function apiGet() {
+    async function apiGet(signal) {
       const url = `${CONFIG.GAS_WEB_APP_URL}?action=init&tg_id=${encodeURIComponent(tgUser.id)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, signal ? { signal } : undefined);
       return await res.json();
     }
 
@@ -332,51 +385,50 @@
       return await res.json();
     }
 
-  async function loadData() {
-  state.loading = true;
-  state.errorMsg = '';
-  render();
+    async function loadData() {
+      state.loading = true;
+      state.errorMsg = '';
+      render();
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
 
-  try {
-    const url = `${CONFIG.GAS_WEB_APP_URL}?action=init&tg_id=${encodeURIComponent(tgUser.id)}`;
-    const res = await fetch(url, { signal: controller.signal });
-    const data = await res.json();
+      try {
+        const data = await apiGet(controller.signal);
 
-    if (data && data.ok) {
-      state.isCoach = Boolean(data.isCoach);
-      state.clientRecord = data.client;
-      state.clients = data.clients || [];
-      state.bookings = data.bookings || [];
-      state.journal = data.journal || [];
-      state.blockedSlots = data.blockedSlots || [];
+        if (data && data.ok) {
+          state.isCoach = Boolean(data.isCoach);
+          state.clientRecord = data.client;
+          state.clients = data.clients || [];
+          state.bookings = data.bookings || [];
+          state.journal = data.journal || [];
+          state.blockedSlots = data.blockedSlots || [];
 
-      if (!state.isCoach && !state.clientRecord) {
-        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
-        const reg = await apiPost({
-          type: 'register_client',
-          tg_id: tgUser.id,
-          name: fullName,
-          username: tgUser.username ? '@' + tgUser.username : ''
-        });
-        state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
+          if (!state.isCoach && !state.clientRecord) {
+            const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+            const reg = await apiPost({
+              type: 'register_client',
+              tg_id: tgUser.id,
+              name: fullName,
+              username: tgUser.username ? '@' + tgUser.username : ''
+            });
+            state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
+          }
+        } else {
+          state.errorMsg = 'Сервер расписания вернул ошибку.';
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки:', e);
+        state.errorMsg = e.name === 'AbortError'
+          ? 'Сервер Google отвечает слишком долго (таймаут 8 сек).'
+          : 'Не удалось связаться с сервером расписания.';
+      } finally {
+        clearTimeout(timer);
+        state.loading = false;
+        render();
       }
-    } else {
-      state.errorMsg = 'Сервер расписания вернул ошибку.';
     }
-  } catch (e) {
-    console.error('Ошибка загрузки:', e);
-    state.errorMsg = e.name === 'AbortError'
-      ? 'Сервер Google отвечает слишком долго (таймаут 8 сек).'
-      : 'Не удалось связаться с сервером расписания.';
-  } finally {
-    clearTimeout(timer);
-    state.loading = false;
-    render();
-  }
-}
+
     function hoursUntil(dateStr, timeStr) {
       const [y, m, d] = dateStr.split('-').map(Number);
       const [hh, mm] = String(timeStr).split(':').map(Number);
@@ -384,7 +436,6 @@
       return (target.getTime() - Date.now()) / (1000 * 60 * 60);
     }
 
-    // Возвращает все активные записи и блокировки на выбранный день, которые перекрывают выбранный 60-минутный слот
     function getOverlappingItems(dateStr, slotTime) {
       const overlappingBookings = state.bookings.filter(b =>
         b.date === dateStr &&
@@ -409,7 +460,21 @@
       ctaHolder.innerHTML = '';
       navHolder.innerHTML = '';
 
-      if (state.loading) return;
+      if (state.loading) {
+        app.innerHTML = `<div class="loader">Синхронизация расписания...</div>`;
+        return;
+      }
+
+      if (state.errorMsg) {
+        app.innerHTML = `
+          <div class="card" style="text-align:center; padding:22px 16px;">
+            <div style="font-weight:700; font-size:15px; color:var(--danger); margin-bottom:6px;">${state.errorMsg}</div>
+            <div style="font-size:12px; color:var(--hint); margin-bottom:14px;">Проверь интернет-соединение или доступ к script.google.com</div>
+            <button class="btn btn-primary" onclick="loadData()">Повторить</button>
+          </div>
+        `;
+        return;
+      }
 
       if (state.isCoach) {
         roleBadge.textContent = 'Тренер';
@@ -429,7 +494,7 @@
             <p style="font-size:13px; color:var(--hint); line-height:1.45;">
               Как только тренер подтвердит доступ, здесь откроется расписание для записи на тренировки.
             </p>
-            <button class="btn btn-primary" onclick="location.reload()">Обновить статус</button>
+            <button class="btn btn-primary" onclick="loadData()">Обновить статус</button>
           </div>
         `;
         return;
@@ -484,7 +549,6 @@
         const splitCount = overlappingBookings.filter(b => b.format === 'split').length;
         const alreadyMine = overlappingBookings.some(b => String(b.client_tg_id) === String(tgUser.id));
 
-        // Сплит 1/2 доступен для присоединения только если запись начинается ровно в этот слот (и нет перекрытий со стороны)
         const canJoinSplit = !alreadyMine && overlappingBlocks.length === 0 && !hasSolo && splitCount === 1 && exactBookings.length === 1;
 
         if (overlappingBlocks.length > 0 || hasSolo || splitCount >= 2 || alreadyMine || (splitCount === 1 && !canJoinSplit)) {
@@ -571,7 +635,7 @@
             html += `
               <div class="coach-slot-row" style="border-left:4px solid var(--accent);">
                 <div>
-                  <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} —${names}</div>
+                  <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — ${names}</div>
                   <div style="font-size:11px; color:var(--hint);">Занято записями: ${overlappingBookings.length} чел.</div>
                 </div>
                 <button class="btn btn-del btn-sm" onclick="cancelBooking('${cancellableBooking.id}', true)">Отменить</button>
@@ -638,7 +702,93 @@
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
                   <div style="font-weight:700; font-size:15px;">${c.name}</div>
-                  <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits \vert{}\vert{} 0}</b> ·${c.username || ''}</div>
+                  <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits || 0}</b> · ${c.username || ''}</div>
                 </div>
                 <div style="display:flex; gap:6px;">
                   <button class="btn btn-sm" style="background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent-border);" onclick="toggleJournal('${c.tg_id}')">📓 Журнал</button>
+                  <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">🗑</button>
+                </div>
+              </div>
+              ${isOpen ? `
+                <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
+                  <div style="font-size:12px; font-weight:700; color:var(--hint);">Заметки тренера (клиент не видит):</div>
+                  ${clientNotes.length === 0 ? `<div style="font-size:12px; color:var(--hint); margin-top:4px;">Записей пока нет</div>` : ''}
+                  ${clientNotes.map(n => `<div class="note-box"><b>${n.date}:</b> ${n.note}</div>`).join('')}
+                  <textarea id="note_${c.tg_id}" rows="2" placeholder="Что делали на тренировке, акценты..."></textarea>
+                  <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveNote('${c.tg_id}', '${String(c.name || '').replace(/'/g, '')}')">Сохранить заметку</button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        });
+
+        app.innerHTML = html;
+      }
+    }
+
+    function selectDate(iso) { state.selectedDate = iso; state.selectedTime = null; render(); }
+    function selectSlot(time, forceSplit) {
+      state.selectedTime = time;
+      if (forceSplit) state.selectedFormat = 'split';
+      render();
+    }
+    function setFormat(fmt) { state.selectedFormat = fmt; render(); }
+    function setCoachTab(tab) { state.coachTab = tab; render(); }
+    function toggleJournal(id) {
+      state.activeClientJournalId = String(state.activeClientJournalId) === String(id) ? null : id;
+      render();
+    }
+
+    async function bookNow() {
+      const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+      state.loading = true; render();
+      await apiPost({
+        type: 'create_booking',
+        date: state.selectedDate,
+        time: state.selectedTime,
+        duration: SESSION_DURATION_MIN,
+        format: state.selectedFormat,
+        client_tg_id: tgUser.id,
+        client_name: fullName
+      });
+      state.selectedTime = null;
+      await loadData();
+    }
+
+    async function cancelBooking(bookingId, forceByCoach = false) {
+      state.loading = true; render();
+      await apiPost({ type: 'cancel_booking', booking_id: bookingId, force_by_coach: forceByCoach });
+      await loadData();
+    }
+
+    async function toggleBlock(time) {
+      state.loading = true; render();
+      await apiPost({
+        type: 'toggle_block_slot',
+        date: state.selectedDate,
+        time: time,
+        duration: SESSION_DURATION_MIN,
+        reason: 'Личные дела'
+      });
+      await loadData();
+    }
+
+    async function moderateClient(targetId, decision) {
+      state.loading = true; render();
+      await apiPost({ type: 'moderate_client', target_tg_id: targetId, decision: decision });
+      await loadData();
+    }
+
+    async function saveNote(clientId, clientName) {
+      const el = document.getElementById('note_' + clientId);
+      const text = el && el.value.trim();
+      if (!text) return;
+      state.loading = true; render();
+      await apiPost({ type: 'add_journal_note', client_tg_id: clientId, client_name: clientName, note: text });
+      await loadData();
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
