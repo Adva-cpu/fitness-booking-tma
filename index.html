@@ -5,814 +5,928 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Запись на тренировки</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
-      --bg: #121417;
-      --card: #1c2026;
-      --card-elevated: #242932;
-      --text: #f3f4f6;
-      --hint: #9ca3af;
-      --accent: #3b9eff;
-      --accent-soft: #1a2d42;
-      --accent-border: #2c4c6e;
-      --amber: #fbbf24;
-      --amber-bg: #2e230f;
-      --amber-border: #785413;
-      --green: #34d399;
-      --green-bg: #102b22;
-      --green-border: #1f5c47;
-      --danger: #f87171;
-      --danger-bg: #2f1719;
-      --danger-border: #6b272c;
-      --border: #2d333d;
+      --bg: #0d1017;
+      --card: #161b24;
+      --card-hover: #1e2532;
+      --border: #262e3d;
+      --text: #f1f5f9;
+      --muted: #8b95a5;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
     body {
-      margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      padding-bottom: 84px;
+      min-height: 100vh;
+      padding-bottom: 32px;
     }
+
+    .container { max-width: 520px; margin: 0 auto; padding: 14px; }
+
+    /* Шапка и табы */
     .header {
-      background: var(--card);
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 20;
+      margin-bottom: 14px;
     }
-    .header h1 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text); }
-    .badge-role {
+    .header h1 { font-size: 19px; font-weight: 700; }
+    .role-badge {
       font-size: 11px;
-      font-weight: 600;
       padding: 4px 8px;
-      border-radius: 999px;
-      background: var(--accent-soft);
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.15);
       color: var(--accent);
-      border: 1px solid var(--accent-border);
+      font-weight: 600;
     }
-    .container { max-width: 480px; margin: 0 auto; padding: 12px 14px; }
-    .card {
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
       background: var(--card);
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 12px;
+      padding: 4px;
+      border-radius: 12px;
       border: 1px solid var(--border);
+      margin-bottom: 16px;
     }
-    .section-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--hint);
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      margin: 14px 0 8px;
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 10px;
+      border-radius: 9px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .days-strip {
+    .tab-btn.active { background: var(--accent); color: #fff; }
+    .badge {
+      background: var(--red);
+      color: #fff;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    /* Лента дат */
+    .dates-scroll {
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
       scrollbar-width: none;
     }
-    .days-strip::-webkit-scrollbar { display: none; }
-    .day-pill {
+    .dates-scroll::-webkit-scrollbar { display: none; }
+    .date-chip {
+      flex: 0 0 auto;
       min-width: 58px;
-      padding: 10px 8px;
-      border-radius: 12px;
       background: var(--card);
       border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 8px;
       text-align: center;
       cursor: pointer;
-      flex-shrink: 0;
-      color: var(--text);
     }
-    .day-pill.active {
+    .date-chip.active {
       background: var(--accent);
-      color: #ffffff;
       border-color: var(--accent);
     }
-    .day-pill .dow { font-size: 11px; opacity: 0.8; }
-    .day-pill .dom { font-size: 16px; font-weight: 700; margin-top: 2px; }
+    .date-chip .dow { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .date-chip.active .dow { color: rgba(255,255,255,0.85); }
+    .date-chip .day { font-size: 16px; font-weight: 700; margin-top: 2px; }
 
+    /* Карточки и списки */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 16px 0 8px;
+    }
+
+    /* Слоты для клиента (сетка) */
     .slots-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
-    .slot {
-      padding: 12px 6px;
-      border-radius: 12px;
+    .slot-btn {
       background: var(--card);
       border: 1px solid var(--border);
-      text-align: center;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
       color: var(--text);
-    }
-    .slot.selected {
-      background: var(--accent);
-      color: #ffffff;
-      border-color: var(--accent);
-    }
-    .slot.split-open {
-      background: var(--amber-bg);
-      border: 1.5px solid var(--amber-border);
-      color: var(--amber);
-    }
-    .slot.split-open.selected {
-      background: var(--amber);
-      color: #121417;
-      border-color: var(--amber);
-    }
-    .slot.busy {
-      background: #171a1f;
-      color: #6b7280;
-      border-color: #232830;
-      cursor: not-allowed;
-    }
-    .slot-sub { display: block; font-size: 10px; font-weight: 500; margin-top: 2px; }
-
-    .format-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-    .format-btn {
-      padding: 10px;
+      padding: 12px 6px;
       border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--card-elevated);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: center;
-    }
-    .format-btn.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border-radius: 12px;
-      border: none;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-primary { background: var(--accent); color: #ffffff; }
-    .btn-danger-outline {
-      background: var(--danger-bg);
-      color: var(--danger);
-      border: 1px solid var(--danger-border);
-    }
-    .btn-sm { padding: 7px 10px; font-size: 12px; border-radius: 8px; width: auto; }
-    .btn-approve {
-      background: var(--green-bg);
-      color: var(--green);
-      border: 1px solid var(--green-border);
-    }
-    .btn-del {
-      background: var(--danger-bg);
-      color: var(--danger);
-      border: 1px solid var(--danger-border);
-    }
-    .btn-neutral {
-      background: var(--card-elevated);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
+    .slot-btn:active { background: var(--accent); border-color: var(--accent); }
 
-    .booking-item {
+    /* Слоты для тренера (список) */
+    .trainer-slot {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .booking-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .booking-item:first-child { padding-top: 0; }
-
-    .coach-slot-row {
-      display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
+      padding: 12px 14px;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       margin-bottom: 8px;
-    }
-
-    .bottom-nav {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: var(--card);
-      border-top: 1px solid var(--border);
-      display: flex;
-      z-index: 30;
-    }
-    .nav-btn {
-      flex: 1;
-      padding: 10px 4px;
-      border: none;
-      background: none;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--hint);
       cursor: pointer;
     }
-    .nav-btn.active { color: var(--accent); }
+    .trainer-slot.workout { border-left: 4px solid var(--accent); }
+    .trainer-slot.personal { border-left: 4px solid var(--amber); background: rgba(245, 158, 11, 0.06); }
+    .trainer-slot.blocked-overlap { opacity: 0.45; border-style: dashed; }
+    .slot-time { font-size: 15px; font-weight: 700; min-width: 52px; }
+    .slot-info { flex: 1; margin: 0 12px; }
+    .slot-title { font-size: 14px; font-weight: 600; }
+    .slot-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .note-indicator {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--green);
+      margin-top: 3px;
+    }
 
-    .fixed-cta {
-      position: fixed;
-      bottom: 14px; left: 14px; right: 14px;
-      max-width: 452px;
-      margin: 0 auto;
-      z-index: 25;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    }
-    .note-box {
-      background: var(--card-elevated);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      margin-top: 6px;
-      border-left: 3px solid var(--accent);
-    }
-    textarea, input[type="text"] {
+    /* Кнопки и поля */
+    .btn {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--card-elevated);
-      color: var(--text);
-      font-family: inherit;
+      border: none;
       font-size: 14px;
-      margin-top: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
     }
-    textarea::placeholder { color: var(--hint); }
-    .loader { text-align: center; padding: 40px 16px; color: var(--hint); font-size: 14px; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--green); color: #052e16; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .btn-amber { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .btn-secondary { background: var(--card-hover); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm { width: auto; padding: 7px 12px; font-size: 12px; border-radius: 8px; }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 95px; }
+
+    /* Модальное окно */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 520px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0;
+      padding: 18px 16px 28px;
+      max-height: 88vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .modal-close {
+      background: var(--card-hover);
+      border: none;
+      color: var(--muted);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .center-screen {
+      text-align: center;
+      padding: 48px 16px;
+    }
+    .center-screen h2 { font-size: 20px; margin-bottom: 8px; }
+    .center-screen p { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
+
+    .hidden { display: none !important; }
+
+    /* Панель для теста вне Telegram */
+    .dev-bar {
+      background: #1e293b;
+      padding: 8px 12px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1 id="headerTitle">Тренировки</h1>
-    <span class="badge-role" id="roleBadge">Загрузка...</span>
+
+<div id="dev-bar" class="dev-bar hidden">
+  <span>Тест в браузере</span>
+  <div style="display:flex; gap:6px;">
+    <button class="btn btn-sm btn-primary" onclick="switchDevRole('trainer')">Тренер</button>
+    <button class="btn btn-sm btn-secondary" onclick="switchDevRole('client')">Клиент</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Экран загрузки -->
+  <div id="view-loading" class="center-screen">
+    <p>Загрузка расписания...</p>
   </div>
 
-  <div class="container" id="app">
-    <div class="loader">Синхронизация расписания...</div>
-  </div>
-
-  <div id="ctaHolder"></div>
-  <div id="navHolder"></div>
-
-  <script>
-    // =========================================================
-    // НАСТРОЙКИ — ВСТАВЬ СВОИ ДАННЫЕ СЮДА ПЕРЕД ЗАГРУЗКОЙ НА GITHUB
-    // =========================================================
-    const CONFIG = {
-      GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbyVDtMghWAr9eDHMHWBnTPxGf_xQ9cU3iB6FCF3jFIwv7hDgcI9STbnhJwLrwLXdTZrpg/exec',
-      COACH_TG_ID: '1457299337'
-    };
-
-    const SESSION_DURATION_MIN = 60; // Тренировка всегда ровно 60 минут
-    const STEP_MIN = 30;             // Шаг выбора времени — 30 минут
-
-    const tg = window.Telegram && window.Telegram.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      if (tg.setBackgroundColor) tg.setBackgroundColor('#121417');
-      if (tg.setHeaderColor) tg.setHeaderColor('#1c2026');
-    }
-
-    const tgUser = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {
-      id: CONFIG.COACH_TG_ID,
-      first_name: 'Тренер',
-      username: ''
-    };
-
-    function timeToMinutes(t) {
-      const [h, m] = String(t || '00:00').split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    }
-
-    function minutesToTime(mins) {
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    }
-
-    // Слоты с 07:30 с шагом 30 минут так, чтобы 60-минутная тренировка заканчивалась не позже 23:00
-    function buildSlots(startTime = '07:30', closingTime = '23:00', durationMin = SESSION_DURATION_MIN, stepMin = STEP_MIN) {
-      const start = timeToMinutes(startTime);
-      const lastAllowedStart = timeToMinutes(closingTime) - durationMin;
-      const list = [];
-      for (let t = start; t <= lastAllowedStart; t += stepMin) {
-        list.push(minutesToTime(t));
-      }
-      return list;
-    }
-
-    const SLOTS = buildSlots('07:30', '23:00', SESSION_DURATION_MIN, STEP_MIN);
-
-    // Пересекаются ли два 60-минутных интервала [startA, startA + 60) и [startB, startB + 60)
-    function intervalsOverlap(startTimeA, startTimeB, durationA = SESSION_DURATION_MIN, durationB = SESSION_DURATION_MIN) {
-      const a1 = timeToMinutes(startTimeA);
-      const a2 = a1 + durationA;
-      const b1 = timeToMinutes(startTimeB);
-      const b2 = b1 + durationB;
-      return a1 < b2 && a2 > b1;
-    }
-
-    const state = {
-      loading: true,
-      errorMsg: '',
-      isCoach: String(tgUser.id) === String(CONFIG.COACH_TG_ID),
-      clientRecord: null,
-      clients: [],
-      bookings: [],
-      journal: [],
-      blockedSlots: [],
-      days: buildDays(10),
-      selectedDate: '',
-      selectedTime: null,
-      selectedFormat: 'solo',
-      coachTab: 'schedule',
-      activeClientJournalId: null
-    };
-    state.selectedDate = state.days[0].iso;
-
-    function buildDays(count) {
-      const dowNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
-      const list = [];
-      const now = new Date();
-      for (let i = 0; i < count; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        list.push({
-          iso: `${y}-${m}-${day}`,
-          dow: i === 0 ? 'Сегодня' : dowNames[d.getDay()],
-          dom: d.getDate()
-        });
-      }
-      return list;
-    }
-
-    async function apiGet(signal) {
-      const url = `${CONFIG.GAS_WEB_APP_URL}?action=init&tg_id=${encodeURIComponent(tgUser.id)}`;
-      const res = await fetch(url, signal ? { signal } : undefined);
-      return await res.json();
-    }
-
-    async function apiPost(payload) {
-      const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return await res.json();
-    }
-
-    async function loadData() {
-      state.loading = true;
-      state.errorMsg = '';
-      render();
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-
-      try {
-        const data = await apiGet(controller.signal);
-
-        if (data && data.ok) {
-          state.isCoach = Boolean(data.isCoach);
-          state.clientRecord = data.client;
-          state.clients = data.clients || [];
-          state.bookings = data.bookings || [];
-          state.journal = data.journal || [];
-          state.blockedSlots = data.blockedSlots || [];
-
-          if (!state.isCoach && !state.clientRecord) {
-            const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
-            const reg = await apiPost({
-              type: 'register_client',
-              tg_id: tgUser.id,
-              name: fullName,
-              username: tgUser.username ? '@' + tgUser.username : ''
-            });
-            state.clientRecord = { tg_id: tgUser.id, name: fullName, status: reg.status || 'pending' };
-          }
-        } else {
-          state.errorMsg = 'Сервер расписания вернул ошибку.';
-        }
-      } catch (e) {
-        console.error('Ошибка загрузки:', e);
-        state.errorMsg = e.name === 'AbortError'
-          ? 'Сервер Google отвечает слишком долго (таймаут 8 сек).'
-          : 'Не удалось связаться с сервером расписания.';
-      } finally {
-        clearTimeout(timer);
-        state.loading = false;
-        render();
-      }
-    }
-
-    function hoursUntil(dateStr, timeStr) {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const [hh, mm] = String(timeStr).split(':').map(Number);
-      const target = new Date(y, m - 1, d, hh || 0, mm || 0, 0);
-      return (target.getTime() - Date.now()) / (1000 * 60 * 60);
-    }
-
-   function getOverlappingItems(dateStr, slotTime) {
-  const overlappingBookings = state.bookings.filter(b =>
-    b.date === dateStr &&
-    b.status !== 'cancelled' &&
-    intervalsOverlap(slotTime, b.time, SESSION_DURATION_MIN, Number(b.duration) || SESSION_DURATION_MIN)
-  );
-
-  const overlappingBlocks = state.blockedSlots.filter(s =>
-    s.date === dateStr &&
-    intervalsOverlap(slotTime, s.time, SESSION_DURATION_MIN, Number(s.duration) || SESSION_DURATION_MIN)
-  );
-
-  return { overlappingBookings, overlappingBlocks };
-}
-
-    function render() {
-      const app = document.getElementById('app');
-      const ctaHolder = document.getElementById('ctaHolder');
-      const navHolder = document.getElementById('navHolder');
-      const roleBadge = document.getElementById('roleBadge');
-
-      ctaHolder.innerHTML = '';
-      navHolder.innerHTML = '';
-
-      if (state.loading) {
-        app.innerHTML = `<div class="loader">Синхронизация расписания...</div>`;
-        return;
-      }
-
-      if (state.errorMsg) {
-        app.innerHTML = `
-          <div class="card" style="text-align:center; padding:22px 16px;">
-            <div style="font-weight:700; font-size:15px; color:var(--danger); margin-bottom:6px;">${state.errorMsg}</div>
-            <div style="font-size:12px; color:var(--hint); margin-bottom:14px;">Проверь интернет-соединение или доступ к script.google.com</div>
-            <button class="btn btn-primary" onclick="loadData()">Повторить</button>
-          </div>
-        `;
-        return;
-      }
-
-      if (state.isCoach) {
-        roleBadge.textContent = 'Тренер';
-        renderCoach(app, navHolder);
-      } else {
-        roleBadge.textContent = 'Клиент';
-        renderClient(app, ctaHolder);
-      }
-    }
-
-    function renderClient(app, ctaHolder) {
-      if (!state.clientRecord || state.clientRecord.status !== 'approved') {
-        app.innerHTML = `
-          <div class="card" style="text-align:center; padding:24px 16px;">
-            <div style="font-size:32px; margin-bottom:8px;">⏳</div>
-            <div style="font-weight:700; font-size:16px;">Заявка отправлена тренеру</div>
-            <p style="font-size:13px; color:var(--hint); line-height:1.45;">
-              Как только тренер подтвердит доступ, здесь откроется расписание для записи на тренировки.
-            </p>
-            <button class="btn btn-primary" onclick="loadData()">Обновить статус</button>
-          </div>
-        `;
-        return;
-      }
-
-      const myBookings = state.bookings.filter(b => String(b.client_tg_id) === String(tgUser.id) && b.status !== 'cancelled');
-      let html = '';
-
-      if (myBookings.length > 0) {
-        html += `<div class="section-title">Мои записи</div><div class="card">`;
-        myBookings.forEach(b => {
-          const left = hoursUntil(b.date, b.time);
-          const canCancel = left >= 12;
-          const endTime = minutesToTime(timeToMinutes(b.time) + SESSION_DURATION_MIN);
-          html += `
-            <div class="booking-item">
-              <div>
-                <div style="font-weight:700; font-size:14px;">${b.date} · ${b.time}–${endTime}</div>
-                <div style="font-size:12px; color:var(--hint);">
-                  ${b.format === 'split' ? '👥 Сплит-тренировка (60 мин)' : '👤 Персональная (60 мин)'}
-                </div>
-                ${!canCancel ? `<div style="font-size:11px; color:var(--danger); margin-top:2px;">Отмена недоступна (менее 12 ч)</div>` : ''}
-              </div>
-              ${canCancel
-                ? `<button class="btn btn-danger-outline btn-sm" onclick="cancelBooking('${b.id}')">Отменить</button>`
-                : `<span style="font-size:18px;">🔒</span>`
-              }
-            </div>
-          `;
-        });
-        html += `</div>`;
-      }
-
-      html += `
-        <div class="section-title">Выберите день</div>
-        <div class="days-strip">
-          ${state.days.map(d => `
-            <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
-              <div class="dow">${d.dow}</div>
-              <div class="dom">${d.dom}</div>
-            </div>
-          `).join('')}
-        </div>
-        <div class="section-title">Свободное время (60 мин)</div>
-        <div class="slots-grid">
-      `;
-
-      SLOTS.forEach(slotTime => {
-        const { overlappingBookings, overlappingBlocks } = getOverlappingItems(state.selectedDate, slotTime);
-        const exactBookings = overlappingBookings.filter(b => b.time === slotTime);
-        const hasSolo = overlappingBookings.some(b => b.format !== 'split');
-        const splitCount = overlappingBookings.filter(b => b.format === 'split').length;
-        const alreadyMine = overlappingBookings.some(b => String(b.client_tg_id) === String(tgUser.id));
-
-        const canJoinSplit = !alreadyMine && overlappingBlocks.length === 0 && !hasSolo && splitCount === 1 && exactBookings.length === 1;
-
-        if (overlappingBlocks.length > 0 || hasSolo || splitCount >= 2 || alreadyMine || (splitCount === 1 && !canJoinSplit)) {
-          html += `<div class="slot busy">${slotTime}<span class="slot-sub">${alreadyMine ? 'Вы записаны' : 'Занято'}</span></div>`;
-        } else if (canJoinSplit) {
-          const sel = state.selectedTime === slotTime ? 'selected' : '';
-          html += `<div class="slot split-open ${sel}" onclick="selectSlot('${slotTime}', true)">${slotTime}<span class="slot-sub">👥 Сплит 1/2</span></div>`;
-        } else {
-          const sel = state.selectedTime === slotTime ? 'selected' : '';
-          html += `<div class="slot ${sel}" onclick="selectSlot('${slotTime}', false)">${slotTime}<span class="slot-sub">Свободно</span></div>`;
-        }
-      });
-
-      html += `</div>`;
-
-      if (state.selectedTime) {
-        const endTime = minutesToTime(timeToMinutes(state.selectedTime) + SESSION_DURATION_MIN);
-        const { overlappingBookings } = getOverlappingItems(state.selectedDate, state.selectedTime);
-        const isJoiningSplit = overlappingBookings.some(b => b.time === state.selectedTime && b.format === 'split');
-
-        if (!isJoiningSplit) {
-          html += `
-            <div class="card" style="margin-top:12px;">
-              <div style="font-size:13px; font-weight:700;">Формат тренировки в ${state.selectedTime}–${endTime} (60 мин)</div>
-              <div class="format-row">
-                <div class="format-btn ${state.selectedFormat === 'solo' ? 'active' : ''}" onclick="setFormat('solo')">👤 Персональная</div>
-                <div class="format-btn ${state.selectedFormat === 'split' ? 'active' : ''}" onclick="setFormat('split')">👥 Сплит (оставить 1 место)</div>
-              </div>
-            </div>
-          `;
-        } else {
-          html += `
-            <div class="card" style="margin-top:12px; background:var(--amber-bg); border-color:var(--amber-border);">
-              <div style="font-size:13px; font-weight:700; color:var(--amber);">👥 Присоединение к сплиту (2-е место)</div>
-              <div style="font-size:12px; color:var(--hint); margin-top:2px;">Интервал ${state.selectedTime}–${endTime} будет закрыт после вашей записи.</div>
-            </div>
-          `;
-        }
-
-        ctaHolder.innerHTML = `
-          <div class="fixed-cta">
-            <button class="btn btn-primary" onclick="bookNow()">Записаться на ${state.selectedDate} · ${state.selectedTime}–${endTime}</button>
-          </div>
-        `;
-      }
-
-      app.innerHTML = html;
-    }
-
-    function renderCoach(app, navHolder) {
-  navHolder.innerHTML = `
-    <div class="bottom-nav">
-      <button class="nav-btn ${state.coachTab === 'schedule' ? 'active' : ''}" onclick="setCoachTab('schedule')">📅 Расписание</button>
-      <button class="nav-btn ${state.coachTab === 'clients' ? 'active' : ''}" onclick="setCoachTab('clients')">👥 Клиенты и журнал</button>
+  <!-- Экран подачи заявки (новый клиент) -->
+  <div id="view-register" class="center-screen hidden">
+    <h2>Запись на тренировки</h2>
+    <p>Введите ваше имя и фамилию, чтобы тренер одобрил доступ к расписанию.</p>
+    <input type="text" id="reg-name" placeholder="Например: Алексей Иванов" />
+    <div style="margin-top:12px;">
+      <button class="btn btn-primary" onclick="submitRegistration()">Отправить заявку</button>
     </div>
-  `;
+  </div>
 
-  if (state.coachTab === 'schedule') {
-    let html = `
-      <div class="card" style="background:var(--accent-soft); border-color:var(--accent-border); padding:10px 12px;">
-        <div style="font-size:12px; font-weight:700; color:var(--accent);">📅 Слоты 07:30–22:00 (шаг 30 мин, длительность 60 мин)</div>
-        <div style="font-size:11px; color:var(--hint); margin-top:2px;">Тренировка длится 60 минут и перекрывает соседний 30-минутный старт.</div>
-      </div>
-      <div class="days-strip">
-        ${state.days.map(d => `
-          <div class="day-pill ${d.iso === state.selectedDate ? 'active' : ''}" onclick="selectDate('${d.iso}')">
-            <div class="dow">${d.dow}</div>
-            <div class="dom">${d.dom}</div>
-          </div>
-        `).join('')}
-      </div>
-      <div class="section-title">Слоты на ${state.selectedDate}</div>
-    `;
+  <!-- Ожидание одобрения -->
+  <div id="view-pending" class="center-screen hidden">
+    <h2>Заявка на рассмотрении</h2>
+    <p>Тренер скоро подтвердит ваш доступ. После этого здесь откроется расписание.</p>
+    <button class="btn btn-secondary" onclick="initApp()">Проверить статус</button>
+  </div>
 
-    SLOTS.forEach(slotTime => {
-      const slotStart = timeToMinutes(slotTime);
-      const slotEnd = slotStart + SESSION_DURATION_MIN;
-      const endTime = minutesToTime(slotEnd);
-      const { overlappingBookings, overlappingBlocks } = getOverlappingItems(state.selectedDate, slotTime);
+  <!-- Удалён / заблокирован -->
+  <div id="view-deleted" class="center-screen hidden">
+    <h2>Доступ ограничен</h2>
+    <p>Для записи на тренировки свяжитесь с тренером напрямую.</p>
+  </div>
 
-      const exactBookings = overlappingBookings.filter(b => b.time === slotTime);
-      const exactBlock = overlappingBlocks.find(s => s.time === slotTime);
+  <!-- ИНТЕРФЕЙС КЛИЕНТА -->
+  <div id="view-client" class="hidden">
+    <div class="header">
+      <h1>Запись на тренировку</h1>
+      <span class="role-badge" id="client-name-badge"></span>
+    </div>
 
-      if (exactBookings.length > 0) {
-        const names = exactBookings.map(b => `${b.client_name} (${b.format === 'split' ? 'Сплит' : 'Перс.'})`).join(', ');
-        html += `
-          <div class="coach-slot-row" style="border-left:4px solid var(--accent);">
-            <div>
-              <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — ${names}</div>
-              <div style="font-size:11px; color:var(--hint);">Записано: ${exactBookings.length} чел.</div>
-            </div>
-            <button class="btn btn-del btn-sm" onclick="cancelBooking('${exactBookings[0].id}', true)">Отменить</button>
-          </div>
-        `;
-      } else if (overlappingBookings.length > 0) {
-        const parentBooking = overlappingBookings[0];
-        html += `
-          <div class="coach-slot-row" style="background:var(--card-elevated); opacity:0.85;">
-            <div>
-              <div style="font-weight:600; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — Перекрыто (${parentBooking.client_name} с ${parentBooking.time})</div>
-              <div style="font-size:11px; color:var(--hint);">Старт в ${slotTime} недоступен из-за 60-минутной записи</div>
-            </div>
-          </div>
-        `;
-      } else if (exactBlock) {
-        const isGcal = exactBlock.source === 'gcal';
-        const bEnd = minutesToTime(timeToMinutes(exactBlock.time) + (Number(exactBlock.duration) || SESSION_DURATION_MIN));
-        html += `
-          <div class="coach-slot-row" style="background:var(--card-elevated);">
-            <div>
-              <div style="font-weight:700; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — 🔒 ${exactBlock.reason || 'Закрыто'} (${exactBlock.time}–${bEnd})</div>
-              <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : 'Закрыто вручную'}</div>
-            </div>
-            ${!isGcal ? `<button class="btn btn-approve btn-sm" onclick="toggleBlock('${slotTime}')">Открыть</button>` : ''}
-          </div>
-        `;
-      } else if (overlappingBlocks.length > 0) {
-        const parentBlock = overlappingBlocks[0];
-        const isGcal = parentBlock.source === 'gcal';
-        html += `
-          <div class="coach-slot-row" style="background:var(--card-elevated); opacity:0.85;">
-            <div>
-              <div style="font-weight:600; font-size:14px; color:var(--hint);">${slotTime}–${endTime} — Перекрыто (${parentBlock.reason || 'Занято'} с ${parentBlock.time})</div>
-              <div style="font-size:11px; color:var(--hint);">${isGcal ? 'Из Google Календаря' : 'Перекрыто соседним слотом'}</div>
-            </div>
-          </div>
-        `;
-      } else {
-        html += `
-          <div class="coach-slot-row">
-            <div style="font-weight:700; font-size:14px;">${slotTime}–${endTime} — <span style="color:var(--green); font-weight:500;">Свободно</span></div>
-            <button class="btn btn-neutral btn-sm" onclick="toggleBlock('${slotTime}')">🔒 Личное время</button>
-          </div>
-        `;
-      }
+    <div id="client-my-bookings"></div>
+
+    <div class="section-title">Выберите дату</div>
+    <div class="dates-scroll" id="client-dates"></div>
+
+    <div class="section-title">Свободное время (длительность 60 мин)</div>
+    <div class="slots-grid" id="client-slots"></div>
+  </div>
+
+  <!-- ИНТЕРФЕЙС ТРЕНЕРА -->
+  <div id="view-trainer" class="hidden">
+    <div class="header">
+      <h1>Кабинет тренера</h1>
+      <span class="role-badge">Тренер</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-schedule" onclick="switchTrainerTab('schedule')">Расписание</button>
+      <button class="tab-btn" id="tab-clients" onclick="switchTrainerTab('clients')">
+        Клиенты <span id="pending-badge" class="badge hidden">0</span>
+      </button>
+    </div>
+
+    <!-- Вкладка: Расписание -->
+    <div id="trainer-schedule-tab">
+      <div class="dates-scroll" id="trainer-dates"></div>
+      <div id="trainer-slots-list"></div>
+    </div>
+
+    <!-- Вкладка: Клиенты -->
+    <div id="trainer-clients-tab" class="hidden">
+      <div class="section-title">Новые заявки</div>
+      <div id="pending-clients-list"></div>
+
+      <div class="section-title">Активные клиенты</div>
+      <div id="approved-clients-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modal-title">Детали</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+  // =========================================================================
+  // 1. НАСТРОЙКИ (ЗАПОЛНИТЕ СВОИ ДАННЫЕ)
+  // =========================================================================
+  const CONFIG = {
+    SUPABASE_URL: 'https://YOUR_PROJECT.supabase.co',
+    SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY',
+    TRAINER_TG_ID: 123456789, // Ваш числовой Telegram ID (можно узнать у @userinfobot)
+
+    // Точка интеграции с Google Календарём (URL веб-приложения Google Apps Script).
+    // Оставьте пустым, пока не настроите календарь — приложение будет работать без него.
+    GCAL_WEBHOOK_URL: '',
+
+    WORK_START: '07:30',
+    WORK_END: '23:00',
+    STEP_MIN: 30,
+    WORKOUT_DURATION: 60
+  };
+
+  // =========================================================================
+  // 2. ИНИЦИАЛИЗАЦИЯ
+  // =========================================================================
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('#0d1017');
+    tg.setBackgroundColor('#0d1017');
+  }
+
+  const db = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+  let currentUser = null;
+  let selectedDate = formatDateLocal(new Date());
+  let dayBookings = [];
+  let allClients = [];
+
+  // Определение пользователя (Telegram или тестовый режим в браузере)
+  function getTgUser() {
+    if (tg?.initDataUnsafe?.user) {
+      return tg.initDataUnsafe.user;
+    }
+    // Фолбэк для локального теста в браузере
+    document.getElementById('dev-bar').classList.remove('hidden');
+    const savedRole = localStorage.getItem('dev_role') || 'trainer';
+    if (savedRole === 'trainer') {
+      return { id: CONFIG.TRAINER_TG_ID, first_name: 'Тренер', username: 'trainer_dev' };
+    }
+    return { id: 999999999, first_name: 'Тест Клиент', username: 'test_client' };
+  }
+
+  function switchDevRole(role) {
+    localStorage.setItem('dev_role', role);
+    location.reload();
+  }
+
+  // =========================================================================
+  // 3. УТИЛИТЫ ВРЕМЕНИ И АВТОБЛОКИРОВКИ
+  // =========================================================================
+  function formatDateLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function timeToMin(t) {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function minToTime(min) {
+    const h = String(Math.floor(min / 60)).padStart(2, '0');
+    const m = String(min % 60).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+
+  function generateAllSlots() {
+    const slots = [];
+    const start = timeToMin(CONFIG.WORK_START);
+    const end = timeToMin(CONFIG.WORK_END);
+    for (let m = start; m < end; m += CONFIG.STEP_MIN) {
+      slots.push(minToTime(m));
+    }
+    return slots;
+  }
+
+  // Проверка пересечения: если запись на 10:30 (60 мин -> 10:30-11:30),
+  // то кандидат на 10:00 (10:00-11:00) и 11:00 (11:00-12:00) вернут true (пересекается)
+  function isSlotOverlapping(slotTime, durationMin, bookings) {
+    const candStart = timeToMin(slotTime);
+    const candEnd = candStart + durationMin;
+    const workEnd = timeToMin(CONFIG.WORK_END);
+
+    if (candEnd > workEnd) return true;
+
+    return bookings.some(b => {
+      const bStart = timeToMin(b.start_time);
+      const bEnd = bStart + b.duration;
+      return candStart < bEnd && candEnd > bStart;
+    });
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
+  }
+
+  function getContactLink(user) {
+    if (user?.username) return `https://t.me/${user.username}`;
+    if (user?.tg_id) return `tg://user?id=${user.tg_id}`;
+    return '#';
+  }
+
+  // =========================================================================
+  // 4. ФОНОВАЯ СИНХРОНИЗАЦИЯ С GOOGLE КАЛЕНДАРЁМ
+  // =========================================================================
+  function syncGoogleCalendar(action, payload) {
+    if (!CONFIG.GCAL_WEBHOOK_URL) return;
+    // Отправляем в фоне (fire-and-forget), чтобы интерфейс не ждал ответа Google
+    fetch(CONFIG.GCAL_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload })
+    }).catch(err => console.warn('GCal sync skipped:', err));
+  }
+
+  // =========================================================================
+  // 5. СТАРТ И РОУТИНГ ПО РОЛЯМ
+  // =========================================================================
+  function showView(id) {
+    ['view-loading', 'view-register', 'view-pending', 'view-deleted', 'view-client', 'view-trainer']
+      .forEach(v => document.getElementById(v).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+  }
+
+  async function initApp() {
+    showView('view-loading');
+    currentUser = getTgUser();
+
+    // Проверка на роль тренера
+    if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
+      showView('view-trainer');
+      renderDatesStrip('trainer-dates', loadTrainerDay);
+      await Promise.all([loadTrainerDay(), loadClients()]);
+      return;
+    }
+
+    // Проверка статуса клиента в базе
+    const { data, error } = await db
+      .from('users')
+      .select('*')
+      .eq('tg_id', currentUser.id)
+      .maybeSingle();
+
+    if (error) {
+      alert('Ошибка подключения к базе. Проверьте настройки Supabase.');
+      return;
+    }
+
+    if (!data) {
+      document.getElementById('reg-name').value = [currentUser.first_name, currentUser.last_name].filter(Boolean).join(' ');
+      showView('view-register');
+    } else if (data.status === 'pending') {
+      showView('view-pending');
+    } else if (data.status === 'deleted') {
+      showView('view-deleted');
+    } else if (data.status === 'approved') {
+      document.getElementById('client-name-badge').textContent = data.name;
+      showView('view-client');
+      renderDatesStrip('client-dates', loadClientDay);
+      await Promise.all([loadClientDay(), loadClientUpcoming()]);
+    }
+  }
+
+  async function submitRegistration() {
+    const name = document.getElementById('reg-name').value.trim();
+    if (!name) return alert('Введите имя');
+
+    const { error } = await db.from('users').insert({
+      tg_id: currentUser.id,
+      name: name,
+      username: currentUser.username || null,
+      status: 'pending'
     });
 
-    app.innerHTML = html;
-  } else {
-    const pending = state.clients.filter(c => c.status === 'pending');
-    const approved = state.clients.filter(c => c.status === 'approved');
-    let html = '';
+    if (error) return alert('Ошибка отправки заявки: ' + error.message);
+    showView('view-pending');
+  }
 
-    if (pending.length > 0) {
-      html += `<div class="section-title">Ожидают одобрения (${pending.length})</div>`;
-      pending.forEach(c => {
-        html += `
-          <div class="card" style="border-color:var(--amber-border); background:var(--amber-bg);">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-weight:700;">${c.name}</div>
-                <div style="font-size:12px; color:var(--hint);">${c.username || 'ID: ' + c.tg_id}</div>
+  // =========================================================================
+  // 6. ЛЕНТА ДАТ (14 ДНЕЙ ВПЕРЁД)
+  // =========================================================================
+  function renderDatesStrip(containerId, onSelectCallback) {
+    const el = document.getElementById(containerId);
+    const daysRu = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    let html = '';
+    const today = new Date();
+
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const iso = formatDateLocal(d);
+      const active = iso === selectedDate ? 'active' : '';
+      html += `
+        <div class="date-chip ${active}" data-date="${iso}">
+          <div class="dow">${daysRu[d.getDay()]}</div>
+          <div class="day">${d.getDate()}</div>
+        </div>`;
+    }
+    el.innerHTML = html;
+
+    el.querySelectorAll('.date-chip').forEach(chip => {
+      chip.onclick = () => {
+        selectedDate = chip.dataset.date;
+        el.querySelectorAll('.date-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        onSelectCallback();
+      };
+    });
+  }
+
+  // =========================================================================
+  // 7. ЛОГИКА КЛИЕНТА
+  // =========================================================================
+  async function loadClientUpcoming() {
+    const today = formatDateLocal(new Date());
+    const { data } = await db
+      .from('bookings')
+      .select('*')
+      .eq('client_tg_id', currentUser.id)
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    const container = document.getElementById('client-my-bookings');
+    if (!data || !data.length) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = `<div class="section-title">Ваши записи</div>` + data.map(b => `
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:700;">${b.date} в ${b.start_time}</div>
+          <div style="font-size:12px; color:var(--muted);">Тренировка (${b.duration} мин)</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>
+      </div>
+    `).join('');
+  }
+
+  async function loadClientDay() {
+    const { data } = await db
+      .from('bookings')
+      .select('start_time, duration')
+      .eq('date', selectedDate);
+
+    dayBookings = data || [];
+    const allSlots = generateAllSlots();
+    const freeSlots = allSlots.filter(t => !isSlotOverlapping(t, CONFIG.WORKOUT_DURATION, dayBookings));
+
+    const grid = document.getElementById('client-slots');
+    if (!freeSlots.length) {
+      grid.innerHTML = `<div style="grid-column:1/-1; color:var(--muted); font-size:14px;">На этот день свободных окон нет.</div>`;
+      return;
+    }
+
+    grid.innerHTML = freeSlots.map(t => `
+      <button class="slot-btn" onclick="confirmClientBooking('${t}')">${t}</button>
+    `).join('');
+  }
+
+  function confirmClientBooking(time) {
+    const endTime = minToTime(timeToMin(time) + CONFIG.WORKOUT_DURATION);
+    openModal(`Запись на ${selectedDate}`, `
+      <p style="color:var(--muted); margin-bottom:16px;">
+        Подтвердить тренировку с <b>${time}</b> до <b>${endTime}</b>?
+      </p>
+      <button class="btn btn-primary" onclick="createClientBooking('${time}')">Записаться</button>
+    `);
+  }
+
+  async function createClientBooking(time) {
+    // Повторная проверка перед записью на случай одновременного нажатия
+    const { data: fresh } = await db.from('bookings').select('start_time, duration').eq('date', selectedDate);
+    if (isSlotOverlapping(time, CONFIG.WORKOUT_DURATION, fresh || [])) {
+      closeModal();
+      alert('Это время только что заняли. Выберите другое.');
+      return loadClientDay();
+    }
+
+    const { data: inserted, error } = await db.from('bookings').insert({
+      date: selectedDate,
+      start_time: time,
+      duration: CONFIG.WORKOUT_DURATION,
+      client_tg_id: currentUser.id,
+      type: 'workout'
+    }).select('*, users(name, username)').single();
+
+    if (error) return alert('Ошибка записи: ' + error.message);
+
+    syncGoogleCalendar('create', {
+      booking_id: inserted.id,
+      date: selectedDate,
+      start_time: time,
+      duration: CONFIG.WORKOUT_DURATION,
+      title: `Тренировка: ${inserted.users?.name || 'Клиент'}`,
+      description: inserted.users?.username ? `@${inserted.users.username}` : ''
+    });
+
+    closeModal();
+    await Promise.all([loadClientDay(), loadClientUpcoming()]);
+  }
+
+  async function cancelClientBooking(id, date, time) {
+    if (!confirm(`Отменить тренировку ${date} в ${time}?`)) return;
+    await db.from('bookings').delete().eq('id', id);
+    syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
+    await Promise.all([loadClientDay(), loadClientUpcoming()]);
+  }
+
+  // =========================================================================
+  // 8. ЛОГИКА ТРЕНЕРА (РАСПИСАНИЕ, ЗАМЕТКИ, ЛИЧНОЕ ВРЕМЯ)
+  // =========================================================================
+  function switchTrainerTab(tab) {
+    document.getElementById('tab-schedule').classList.toggle('active', tab === 'schedule');
+    document.getElementById('tab-clients').classList.toggle('active', tab === 'clients');
+    document.getElementById('trainer-schedule-tab').classList.toggle('hidden', tab !== 'schedule');
+    document.getElementById('trainer-clients-tab').classList.toggle('hidden', tab !== 'clients');
+    if (tab === 'clients') loadClients();
+  }
+
+  async function loadTrainerDay() {
+    const { data } = await db
+      .from('bookings')
+      .select('*, users(tg_id, name, username)')
+      .eq('date', selectedDate)
+      .order('start_time', { ascending: true });
+
+    dayBookings = data || [];
+    const allSlots = generateAllSlots();
+    const container = document.getElementById('trainer-slots-list');
+
+    container.innerHTML = allSlots.map(time => {
+      const exactBooking = dayBookings.find(b => b.start_time === time);
+
+      // 1. Слот — начало тренировки или личного времени
+      if (exactBooking) {
+        const endTime = minToTime(timeToMin(exactBooking.start_time) + exactBooking.duration);
+        if (exactBooking.type === 'workout') {
+          const clientName = escapeHtml(exactBooking.users?.name || 'Клиент');
+          const hasNote = exactBooking.notes && exactBooking.notes.trim().length > 0;
+          return `
+            <div class="trainer-slot workout" onclick="openWorkoutModal('${exactBooking.id}')">
+              <div class="slot-time">${time}</div>
+              <div class="slot-info">
+                <div class="slot-title">${clientName}</div>
+                <div class="slot-sub">${time} – ${endTime} • Тренировка</div>
+                ${hasNote ? `<div class="note-indicator">Есть заметка о тренировке</div>` : ''}
               </div>
-              <div style="display:flex; gap:6px;">
-                <button class="btn btn-approve btn-sm" onclick="moderateClient('${c.tg_id}', 'approve')">✓ Одобрить</button>
-                <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">✕</button>
+              <span style="color:var(--muted);">›</span>
+            </div>`;
+        } else {
+          return `
+            <div class="trainer-slot personal" onclick="openPersonalModal('${exactBooking.id}')">
+              <div class="slot-time">${time}</div>
+              <div class="slot-info">
+                <div class="slot-title">Личное время</div>
+                <div class="slot-sub">${time} – ${endTime} ${exactBooking.notes ? '• ' + escapeHtml(exactBooking.notes) : ''}</div>
               </div>
+              <span style="color:var(--amber);">✕</span>
+            </div>`;
+        }
+      }
+
+      // 2. Слот занят продолжением предыдущей 60-минутной записи
+      const occupiedInside = dayBookings.some(b => {
+        const s = timeToMin(b.start_time);
+        const cur = timeToMin(time);
+        return cur > s && cur < (s + b.duration);
+      });
+      if (occupiedInside) return ''; // Не дублируем строку, так как выше уже показан интервал
+
+      // 3. Свободен для 30 мин, но автоблокирован для часовой тренировки (например, 10:00 перед 10:30)
+      const blockedForHour = isSlotOverlapping(time, CONFIG.WORKOUT_DURATION, dayBookings);
+      return `
+        <div class="trainer-slot ${blockedForHour ? 'blocked-overlap' : ''}" onclick="openFreeSlotModal('${time}', ${blockedForHour})">
+          <div class="slot-time">${time}</div>
+          <div class="slot-info">
+            <div class="slot-title" style="color:var(--muted); font-weight:500;">
+              ${blockedForHour ? 'Автоблок для клиентов (окно 30 мин)' : 'Свободно'}
             </div>
           </div>
-        `;
-      });
-    }
+          <span style="font-size:12px; color:var(--muted);">+ Закрыть</span>
+        </div>`;
+    }).join('');
+  }
 
-    html += `<div class="section-title">Активные клиенты (${approved.length})</div>`;
-    if (approved.length === 0) {
-      html += `<div class="card" style="color:var(--hint); font-size:13px;">Пока нет одобренных клиентов.</div>`;
-    }
+  // Модалка тренировки: связь с клиентом + заметка "что делали" + отмена
+  function openWorkoutModal(bookingId) {
+    const b = dayBookings.find(x => String(x.id) === String(bookingId));
+    if (!b) return;
 
-    approved.forEach(c => {
-      const clientNotes = state.journal.filter(j => String(j.client_tg_id) === String(c.tg_id));
-      const isOpen = String(state.activeClientJournalId) === String(c.tg_id);
+    const endTime = minToTime(timeToMin(b.start_time) + b.duration);
+    const contactUrl = getContactLink(b.users);
+    const clientName = escapeHtml(b.users?.name || 'Клиент');
 
-      html += `
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+    openModal(`${clientName} (${b.start_time}–${endTime})`, `
+      <a href="${contactUrl}" target="_blank" class="btn btn-primary" style="margin-bottom:14px;">
+        Написать клиенту в Telegram
+      </a>
+
+      <label style="display:block; font-size:13px; color:var(--muted); margin-bottom:6px;">
+        Что делали на тренировке:
+      </label>
+      <textarea id="workout-notes-input" placeholder="Упражнения, рабочие веса, самочувствие...">${escapeHtml(b.notes || '')}</textarea>
+
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="saveWorkoutNotes('${b.id}')">Сохранить заметку</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" onclick="deleteBookingAsTrainer('${b.id}', '${b.date}', '${b.start_time}')">Отменить запись</button>
+      </div>
+    `);
+  }
+
+  async function saveWorkoutNotes(bookingId) {
+    const notes = document.getElementById('workout-notes-input').value.trim();
+    const { error } = await db.from('bookings').update({ notes }).eq('id', bookingId);
+    if (error) return alert('Ошибка сохранения: ' + error.message);
+
+    syncGoogleCalendar('update_notes', { booking_id: bookingId, notes });
+    closeModal();
+    await loadTrainerDay();
+  }
+
+  // Модалка закрытия слота под личное время
+  function openFreeSlotModal(time, blockedForHour) {
+    openModal(`Закрыть время с ${time}`, `
+      <label style="display:block; font-size:13px; color:var(--muted); margin-bottom:6px;">
+        Комментарий (необязательно):
+      </label>
+      <input type="text" id="personal-note-input" placeholder="Например: Обед / Своя тренировка" />
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-amber" onclick="blockPersonalTime('${time}', 30)">Закрыть 30 мин</button>
+        ${!blockedForHour ? `<button class="btn btn-amber" onclick="blockPersonalTime('${time}', 60)">Закрыть 1 час</button>` : ''}
+      </div>
+    `);
+  }
+
+  async function blockPersonalTime(time, duration) {
+    const notes = document.getElementById('personal-note-input').value.trim();
+    const { data: inserted, error } = await db.from('bookings').insert({
+      date: selectedDate,
+      start_time: time,
+      duration: duration,
+      client_tg_id: null,
+      type: 'personal',
+      notes: notes || null
+    }).select().single();
+
+    if (error) return alert('Ошибка: ' + error.message);
+
+    syncGoogleCalendar('create', {
+      booking_id: inserted.id,
+      date: selectedDate,
+      start_time: time,
+      duration: duration,
+      title: notes ? `Личное: ${notes}` : 'Личное время',
+      description: ''
+    });
+
+    closeModal();
+    await loadTrainerDay();
+  }
+
+  function openPersonalModal(bookingId) {
+    const b = dayBookings.find(x => String(x.id) === String(bookingId));
+    if (!b) return;
+    openModal(`Личное время (${b.start_time})`, `
+      <p style="color:var(--muted); margin-bottom:14px;">${escapeHtml(b.notes || 'Без комментария')}</p>
+      <button class="btn btn-danger" onclick="deleteBookingAsTrainer('${b.id}', '${b.date}', '${b.start_time}')">Освободить время</button>
+    `);
+  }
+
+  async function deleteBookingAsTrainer(id, date, time) {
+    await db.from('bookings').delete().eq('id', id);
+    syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
+    closeModal();
+    await loadTrainerDay();
+  }
+
+  // =========================================================================
+  // 9. УПРАВЛЕНИЕ КЛИЕНТАМИ (МОДЕРАЦИЯ И УДАЛЕНИЕ)
+  // =========================================================================
+  async function loadClients() {
+    const { data } = await db.from('users').select('*').order('created_at', { ascending: false });
+    allClients = data || [];
+
+    const pending = allClients.filter(c => c.status === 'pending');
+    const approved = allClients.filter(c => c.status === 'approved');
+
+    const badge = document.getElementById('pending-badge');
+    badge.textContent = pending.length;
+    badge.classList.toggle('hidden', pending.length === 0);
+
+    document.getElementById('pending-clients-list').innerHTML = pending.length
+      ? pending.map(c => `
+          <div class="card">
+            <div style="font-weight:700;">${escapeHtml(c.name)}</div>
+            <div style="font-size:12px; color:var(--muted);">${c.username ? '@' + escapeHtml(c.username) : 'ID: ' + c.tg_id}</div>
+            <div class="btn-row">
+              <button class="btn btn-sm btn-success" style="flex:1;" onclick="setClientStatus(${c.tg_id}, 'approved')">Одобрить</button>
+              <button class="btn btn-sm btn-danger" style="flex:1;" onclick="setClientStatus(${c.tg_id}, 'deleted')">Отклонить</button>
+            </div>
+          </div>`).join('')
+      : `<div style="color:var(--muted); font-size:13px; margin-bottom:12px;">Новых заявок нет</div>`;
+
+    document.getElementById('approved-clients-list').innerHTML = approved.length
+      ? approved.map(c => `
+          <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div>
-              <div style="font-weight:700; font-size:15px;">${c.name}</div>
-              <div style="font-size:12px; color:var(--hint);">Посещений: <b>${c.visits || 0}</b> · ${c.username || ''}</div>
+              <div style="font-weight:600;">${escapeHtml(c.name)}</div>
+              <div style="font-size:12px; color:var(--muted);">${c.username ? '@' + escapeHtml(c.username) : 'Без username'}</div>
             </div>
             <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm" style="background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent-border);" onclick="toggleJournal('${c.tg_id}')">📓 Журнал</button>
-              <button class="btn btn-del btn-sm" onclick="moderateClient('${c.tg_id}', 'delete')">🗑</button>
+              <a href="${getContactLink(c)}" target="_blank" class="btn btn-sm btn-secondary">Написать</a>
+              <button class="btn btn-sm btn-danger" onclick="deleteClient(${c.tg_id}, '${escapeHtml(c.name)}')">Удалить</button>
             </div>
-          </div>
-          ${isOpen ? `
-            <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border);">
-              <div style="font-size:12px; font-weight:700; color:var(--hint);">Заметки тренера (клиент не видит):</div>
-              ${clientNotes.length === 0 ? `<div style="font-size:12px; color:var(--hint); margin-top:4px;">Записей пока нет</div>` : ''}
-              ${clientNotes.map(n => `<div class="note-box"><b>${n.date}:</b> ${n.note}</div>`).join('')}
-              <textarea id="note_${c.tg_id}" rows="2" placeholder="Что делали на тренировке, акценты..."></textarea>
-              <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveNote('${c.tg_id}', '${String(c.name || '').replace(/'/g, '')}')">Сохранить заметку</button>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    });
-
-    app.innerHTML = html;
+          </div>`).join('')
+      : `<div style="color:var(--muted); font-size:13px;">Одобренных клиентов пока нет</div>`;
   }
-}
 
-    function selectDate(iso) { state.selectedDate = iso; state.selectedTime = null; render(); }
-    function selectSlot(time, forceSplit) {
-      state.selectedTime = time;
-      if (forceSplit) state.selectedFormat = 'split';
-      render();
-    }
-    function setFormat(fmt) { state.selectedFormat = fmt; render(); }
-    function setCoachTab(tab) { state.coachTab = tab; render(); }
-    function toggleJournal(id) {
-      state.activeClientJournalId = String(state.activeClientJournalId) === String(id) ? null : id;
-      render();
-    }
+  async function setClientStatus(tgId, status) {
+    await db.from('users').update({ status }).eq('tg_id', tgId);
+    await loadClients();
+  }
 
-    async function bookNow() {
-      const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Клиент';
-      state.loading = true; render();
-      await apiPost({
-        type: 'create_booking',
-        date: state.selectedDate,
-        time: state.selectedTime,
-        duration: SESSION_DURATION_MIN,
-        format: state.selectedFormat,
-        client_tg_id: tgUser.id,
-        client_name: fullName
-      });
-      state.selectedTime = null;
-      await loadData();
-    }
+  async function deleteClient(tgId, name) {
+    if (!confirm(`Удалить клиента ${name} и закрыть ему доступ?`)) return;
+    await db.from('users').update({ status: 'deleted' }).eq('tg_id', tgId);
+    await loadClients();
+  }
 
-    async function cancelBooking(bookingId, forceByCoach = false) {
-      state.loading = true; render();
-      await apiPost({ type: 'cancel_booking', booking_id: bookingId, force_by_coach: forceByCoach });
-      await loadData();
-    }
+  // =========================================================================
+  // 10. МОДАЛЬНОЕ ОКНО
+  // =========================================================================
+  function openModal(title, html) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('open');
+  }
 
-    async function toggleBlock(time) {
-      state.loading = true; render();
-      await apiPost({
-        type: 'toggle_block_slot',
-        date: state.selectedDate,
-        time: time,
-        duration: SESSION_DURATION_MIN,
-        reason: 'Личные дела'
-      });
-      await loadData();
+  function closeModal(e) {
+    if (!e || e.target.id === 'modal-overlay') {
+      document.getElementById('modal-overlay').classList.remove('open');
     }
+  }
 
-    async function moderateClient(targetId, decision) {
-      state.loading = true; render();
-      await apiPost({ type: 'moderate_client', target_tg_id: targetId, decision: decision });
-      await loadData();
-    }
-
-    async function saveNote(clientId, clientName) {
-      const el = document.getElementById('note_' + clientId);
-      const text = el && el.value.trim();
-      if (!text) return;
-      state.loading = true; render();
-      await apiPost({ type: 'add_journal_note', client_tg_id: clientId, client_name: clientName, note: text });
-      await loadData();
-    }
-
-    loadData();
-  </script>
+  initApp();
+</script>
 </body>
 </html>
