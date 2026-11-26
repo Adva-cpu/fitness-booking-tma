@@ -679,7 +679,7 @@
       start_time: time,
       duration: CONFIG.WORKOUT_DURATION,
       title: `Тренировка: ${inserted.users?.name || 'Клиент'}`,
-      description: inserted.users?.username ? `@${inserted.users.username}` : ''
+      description: inserted.users?.username ? `@${inserted.users.username}` : '',
       notify_trainer: true,
   client_name: inserted.users?.name || 'Клиент'
     });
@@ -698,6 +698,7 @@
   notify_trainer: true,
   client_name: document.getElementById('client-name-badge').textContent || 'Клиент'
 });
+    await Promise.all([loadClientDay(), loadClientUpcoming()]);
   }
 
   // =========================================================================
