@@ -285,12 +285,32 @@
   </div>
 
   <!-- Экран подачи заявки (новый клиент) -->
-  <div id="view-register" class="center-screen hidden">
-    <h2>Запись на тренировки</h2>
-    <p>Введите ваше имя и фамилию, чтобы тренер одобрил доступ к расписанию.</p>
-    <input type="text" id="reg-name" placeholder="Например: Алексей Иванов" />
+ <!-- Экран подачи заявки (новый клиент) -->
+  <div id="view-register" class="hidden" style="padding: 20px 0;">
+    <h2 style="font-size: 20px; margin-bottom: 6px;">Запись на тренировки</h2>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+      Заполните короткую анкету, чтобы тренер одобрил доступ и учёл ваши особенности.
+    </p>
+
+    <div class="card">
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Имя и фамилия *</label>
+      <input type="text" id="reg-name" placeholder="Например: Алексей Иванов" style="margin-bottom:12px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Цели тренировок</label>
+      <input type="text" id="reg-goals" placeholder="Похудение, набор массы, выносливость, спина..." style="margin-bottom:12px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Противопоказания / здоровье</label>
+      <input type="text" id="reg-contra" placeholder="Давление, сердце, грыжи, беременность или «нет»" style="margin-bottom:12px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Травмы и операции</label>
+      <input type="text" id="reg-injuries" placeholder="Колени, плечо, поясница (когда были) или «нет»" style="margin-bottom:12px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Спортивный опыт</label>
+      <textarea id="reg-experience" style="min-height:70px;" placeholder="Чем занимались раньше, как давно тренировались в последний раз"></textarea>
+    </div>
+
     <div style="margin-top:12px;">
-      <button class="btn btn-primary" onclick="submitRegistration()">Отправить заявку</button>
+      <button class="btn btn-primary" onclick="submitRegistration()">Отправить анкету и заявку</button>
     </div>
   </div>
 
@@ -547,23 +567,37 @@
     }
   }
 
-  async function submitRegistration() {
+ async function submitRegistration() {
     const name = document.getElementById('reg-name').value.trim();
-    if (!name) return alert('Введите имя');
+    if (!name) return alert('Введите имя и фамилию');
+
+    const goals = document.getElementById('reg-goals').value.trim();
+    const contraindications = document.getElementById('reg-contra').value.trim();
+    const injuries = document.getElementById('reg-injuries').value.trim();
+    const experience = document.getElementById('reg-experience').value.trim();
 
     const { error } = await db.from('users').insert({
       tg_id: currentUser.id,
-      name: name,
+      name,
       username: currentUser.username || null,
-      status: 'pending'
+      status: 'pending',
+      goals: goals || null,
+      contraindications: contraindications || null,
+      injuries: injuries || null,
+      experience: experience || null
     });
 
     if (error) return alert('Ошибка отправки заявки: ' + error.message);
+
     syncGoogleCalendar('new_client', {
-  name: name,
-  username: currentUser.username || '',
-  tg_id: currentUser.id
-});
+      name,
+      username: currentUser.username || '',
+      tg_id: currentUser.id,
+      goals,
+      contraindications,
+      injuries,
+      experience
+    });
     showView('view-pending');
   }
   async function reapplyRegistration() {
@@ -783,7 +817,7 @@ async function cancelClientBooking(id, date, time) {
  async function loadTrainerDay() {
     const { data } = await db
       .from('bookings')
-      .select('*, users(tg_id, name, username)')
+      .select('*, users(tg_id, name, username, goals, contraindications, injuries, experience)')
       .eq('date', selectedDate)
       .order('start_time', { ascending: true });
 
@@ -853,6 +887,29 @@ async function cancelClientBooking(id, date, time) {
     }).join('');
   }
 
+  function renderClientAnketaHtml(u) {
+    if (!u) return '';
+    const rows = [
+      { label: 'Цели', val: u.goals },
+      { label: 'Противопоказания', val: u.contraindications, warn: true },
+      { label: 'Травмы', val: u.injuries, warn: true },
+      { label: 'Опыт', val: u.experience }
+    ].filter(r => r.val && r.val.trim().length > 0);
+
+    if (!rows.length) return '';
+
+    return `
+      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.45;">
+        ${rows.map(r => `
+          <div style="margin-bottom: 4px;">
+            <span style="color: ${r.warn ? 'var(--amber)' : 'var(--muted)'}; font-weight: 600;">${r.label}:</span>
+            <span>${escapeHtml(r.val)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   function openWorkoutModal(slotTime) {
     const list = dayBookings.filter(x => x.start_time === slotTime && x.type === 'workout');
     if (!list.length) return;
@@ -865,11 +922,14 @@ async function cancelClientBooking(id, date, time) {
     const bodyHtml = list.map((b, idx) => {
       const contactUrl = getContactLink(b.users);
       const clientName = escapeHtml(b.users?.name || 'Клиент');
+      const anketaHtml = renderClientAnketaHtml(b.users);
+
       return `
         <div style="${idx > 0 ? 'margin-top:18px; padding-top:18px; border-top:1px solid var(--border);' : ''}">
           <div style="font-weight:700; margin-bottom:8px;">
             ${clientName} ${b.is_split ? '<span style="font-size:11px; color:var(--green);">(Сплит)</span>' : ''}
           </div>
+          ${anketaHtml}
           <a href="${contactUrl}" target="_blank" class="btn btn-primary" style="margin-bottom:10px;">
             Написать ${clientName} в Telegram
           </a>
@@ -887,7 +947,6 @@ async function cancelClientBooking(id, date, time) {
 
     openModal(title, bodyHtml);
   }
-
  async function saveWorkoutNotes(bookingId) {
     const notes = document.getElementById(`workout-notes-${bookingId}`).value.trim();
     const { error } = await db.from('bookings').update({ notes }).eq('id', bookingId);
@@ -1052,7 +1111,8 @@ function openCloseFullDayModal() {
       ? pending.map(c => `
           <div class="card">
             <div style="font-weight:700;">${escapeHtml(c.name)}</div>
-            <div style="font-size:12px; color:var(--muted);">${c.username ? '@' + escapeHtml(c.username) : 'ID: ' + c.tg_id}</div>
+            <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${c.username ? '@' + escapeHtml(c.username) : 'ID: ' + c.tg_id}</div>
+            ${renderClientAnketaHtml(c)}
             <div class="btn-row">
               <button class="btn btn-sm btn-success" style="flex:1;" onclick="setClientStatus(${c.tg_id}, 'approved')">Одобрить</button>
               <button class="btn btn-sm btn-danger" style="flex:1;" onclick="setClientStatus(${c.tg_id}, 'deleted')">Отклонить</button>
@@ -1068,11 +1128,47 @@ function openCloseFullDayModal() {
               <div style="font-size:12px; color:var(--muted);">${c.username ? '@' + escapeHtml(c.username) : 'Без username'}</div>
             </div>
             <div style="display:flex; gap:6px;">
-              <a href="${getContactLink(c)}" target="_blank" class="btn btn-sm btn-secondary">Написать</a>
-              <button class="btn btn-sm btn-danger" onclick="deleteClient(${c.tg_id}, '${escapeHtml(c.name)}')">Удалить</button>
+              <button class="btn btn-sm btn-secondary" onclick="openEditAnketaModal(${c.tg_id})">Анкета</button>
+              <a href="${getContactLink(c)}" target="_blank" class="btn btn-sm btn-secondary">Чат</a>
+              <button class="btn btn-sm btn-danger" onclick="deleteClient(${c.tg_id}, '${escapeHtml(c.name)}')">✕</button>
             </div>
           </div>`).join('')
       : `<div style="color:var(--muted); font-size:13px;">Одобренных клиентов пока нет</div>`;
+  }
+
+  function openEditAnketaModal(tgId) {
+    const c = allClients.find(x => Number(x.tg_id) === Number(tgId));
+    if (!c) return;
+    openModal(`Анкета: ${escapeHtml(c.name)}`, `
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Цели:</label>
+      <input type="text" id="edit-goals" value="${escapeHtml(c.goals || '')}" style="margin-bottom:10px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Противопоказания:</label>
+      <input type="text" id="edit-contra" value="${escapeHtml(c.contraindications || '')}" style="margin-bottom:10px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Травмы:</label>
+      <input type="text" id="edit-injuries" value="${escapeHtml(c.injuries || '')}" style="margin-bottom:10px;" />
+
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Спортивный опыт:</label>
+      <textarea id="edit-experience" style="min-height:75px;">${escapeHtml(c.experience || '')}</textarea>
+
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-success" onclick="saveClientAnketa(${c.tg_id})">Сохранить анкету</button>
+      </div>
+    `);
+  }
+
+  async function saveClientAnketa(tgId) {
+    const payload = {
+      goals: document.getElementById('edit-goals').value.trim() || null,
+      contraindications: document.getElementById('edit-contra').value.trim() || null,
+      injuries: document.getElementById('edit-injuries').value.trim() || null,
+      experience: document.getElementById('edit-experience').value.trim() || null
+    };
+    const { error } = await db.from('users').update(payload).eq('tg_id', tgId);
+    if (error) return alert('Ошибка сохранения: ' + error.message);
+    closeModal();
+    await Promise.all([loadClients(), loadTrainerDay()]);
   }
 
   async function setClientStatus(tgId, status) {
