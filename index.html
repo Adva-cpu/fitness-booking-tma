@@ -596,6 +596,13 @@
   // =========================================================================
   // 7. ЛОГИКА КЛИЕНТА
   // =========================================================================
+  function canCancelBooking(dateStr, timeStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = timeStr.split(':').map(Number);
+    const workoutDate = new Date(y, m - 1, d, hh, mm);
+    const diffHours = (workoutDate - new Date()) / (1000 * 60 * 60);
+    return diffHours >= 12;
+  }
 async function cancelClientBooking(id, date, time) {
     if (!canCancelBooking(date, time)) {
       alert('Отменить тренировку можно не позднее чем за 12 часов. Напишите тренеру напрямую.');
