@@ -562,6 +562,22 @@
 });
     showView('view-pending');
   }
+  async function reapplyRegistration() {
+    const name = [currentUser.first_name, currentUser.last_name].filter(Boolean).join(' ') || 'Клиент';
+    const { error } = await db
+      .from('users')
+      .update({ status: 'pending', username: currentUser.username || null })
+      .eq('tg_id', currentUser.id);
+
+    if (error) return alert('Ошибка: ' + error.message);
+
+    syncGoogleCalendar('new_client', {
+      name: name,
+      username: currentUser.username || '',
+      tg_id: currentUser.id
+    });
+    showView('view-pending');
+  }
 
   // =========================================================================
   // 6. ЛЕНТА ДАТ (14 ДНЕЙ ВПЕРЁД)
