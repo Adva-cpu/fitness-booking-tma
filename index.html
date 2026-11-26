@@ -981,7 +981,32 @@ async function cancelClientBooking(id, date, time) {
       document.getElementById('modal-overlay').classList.remove('open');
     }
   }
+// =========================================================================
+  // 11. АВТООБНОВЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ (SUPABASE REALTIME + ФОЛБЭК)
+  // =========================================================================
+  function refreshCurrentView() {
+    if (!currentUser) return;
+    if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
+      loadTrainerDay();
+      loadClients();
+    } else if (!document.getElementById('view-client').classList.contains('hidden')) {
+      loadClientDay();
+      loadClientUpcoming();
+    } else if (!document.getElementById('view-pending').classList.contains('hidden')) {
+      initApp(); // Если клиент ждёт одобрения — само откроет расписание, как только вы нажмёте «Одобрить»
+    }
+  }
 
+  db.channel('live-updates')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refreshCurrentView)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, refreshCurrentView)
+    .subscribe();
+
+  // Страховочное тихое обновление раз в 15 секунд и при возврате в окно бота
+  setInterval(refreshCurrentView, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshCurrentView();
+  });
   initApp();
 </script>
 </body>
