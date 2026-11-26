@@ -596,6 +596,23 @@
   // =========================================================================
   // 7. ЛОГИКА КЛИЕНТА
   // =========================================================================
+async function cancelClientBooking(id, date, time) {
+    if (!canCancelBooking(date, time)) {
+      alert('Отменить тренировку можно не позднее чем за 12 часов. Напишите тренеру напрямую.');
+      return loadClientUpcoming();
+    }
+    if (!confirm(`Отменить тренировку ${date} в ${time}?`)) return;
+    await db.from('bookings').delete().eq('id', id);
+    syncGoogleCalendar('delete', {
+      booking_id: id,
+      date,
+      start_time: time,
+      notify_trainer: true,
+      client_name: document.getElementById('client-name-badge').textContent || 'Клиент'
+    });
+    await Promise.all([loadClientDay(), loadClientUpcoming()]);
+  }
+
   async function loadClientUpcoming() {
     const today = formatDateLocal(new Date());
     const { data } = await db
@@ -612,15 +629,21 @@
       return;
     }
 
-    container.innerHTML = `<div class="section-title">Ваши записи</div>` + data.map(b => `
-      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-weight:700;">${b.date} в ${b.start_time}</div>
-          <div style="font-size:12px; color:var(--muted);">Тренировка (${b.duration} мин)</div>
+    container.innerHTML = `<div class="section-title">Ваши записи</div>` + data.map(b => {
+      const canCancel = canCancelBooking(b.date, b.start_time);
+      return `
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div>
+            <div style="font-weight:700;">${b.date} в ${b.start_time}</div>
+            <div style="font-size:12px; color:var(--muted);">Тренировка (${b.duration} мин)</div>
+          </div>
+          ${canCancel
+            ? `<button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>`
+            : `<span style="font-size:11px; color:var(--muted); text-align:right;">Отмена &lt;12ч<br>через тренера</span>`
+          }
         </div>
-        <button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   async function loadClientDay() {
@@ -685,19 +708,6 @@
     });
 
     closeModal();
-    await Promise.all([loadClientDay(), loadClientUpcoming()]);
-  }
-
-  async function cancelClientBooking(id, date, time) {
-    if (!confirm(`Отменить тренировку ${date} в ${time}?`)) return;
-    await db.from('bookings').delete().eq('id', id);
-    syncGoogleCalendar('delete', {
-  booking_id: id,
-  date,
-  start_time: time,
-  notify_trainer: true,
-  client_name: document.getElementById('client-name-badge').textContent || 'Клиент'
-});
     await Promise.all([loadClientDay(), loadClientUpcoming()]);
   }
 
@@ -915,6 +925,9 @@
 
   async function setClientStatus(tgId, status) {
     await db.from('users').update({ status }).eq('tg_id', tgId);
+    if (status === 'approved') {
+      syncGoogleCalendar('client_approved', { tg_id: tgId });
+    }
     await loadClients();
   }
 
