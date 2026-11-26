@@ -461,29 +461,24 @@
 
   // Проверка пересечения: если запись на 10:30 (60 мин -> 10:30-11:30),
   // то кандидат на 10:00 (10:00-11:00) и 11:00 (11:00-12:00) вернут true (пересекается)
-  function isSlotOverlapping(slotTime, durationMin, bookings) {
+ function isSlotOverlapping(slotTime, durationMin, bookings) {
     const candStart = timeToMin(slotTime);
     const candEnd = candStart + durationMin;
     const workEnd = timeToMin(CONFIG.WORK_END);
 
     if (candEnd > workEnd) return true;
 
+    // Если ровно на это время уже стоит 1 открытый сплит-клиент — слот доступен для второго
+    const exactBookings = bookings.filter(b => b.start_time === slotTime);
+    if (exactBookings.length === 1 && exactBookings[0].is_split && exactBookings[0].type === 'workout') {
+      return false;
+    }
+
     return bookings.some(b => {
       const bStart = timeToMin(b.start_time);
       const bEnd = bStart + b.duration;
       return candStart < bEnd && candEnd > bStart;
     });
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
-  }
-
-  function getContactLink(user) {
-    if (user?.username) return `https://t.me/${user.username}`;
-    if (user?.tg_id) return `tg://user?id=${user.tg_id}`;
-    return '#';
   }
 
   // =========================================================================
@@ -643,7 +638,7 @@ async function cancelClientBooking(id, date, time) {
     await Promise.all([loadClientDay(), loadClientUpcoming()]);
   }
 
-  async function loadClientUpcoming() {
+ async function loadClientUpcoming() {
     const today = formatDateLocal(new Date());
     const { data } = await db
       .from('bookings')
@@ -661,11 +656,12 @@ async function cancelClientBooking(id, date, time) {
 
     container.innerHTML = `<div class="section-title">Ваши записи</div>` + data.map(b => {
       const canCancel = canCancelBooking(b.date, b.start_time);
+      const formatLabel = b.is_split ? 'Сплит-тренировка' : 'Персональная';
       return `
         <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <div>
             <div style="font-weight:700;">${formatDateRu(b.date)} в ${b.start_time}</div>
-            <div style="font-size:12px; color:var(--muted);">Тренировка (${b.duration} мин)</div>
+            <div style="font-size:12px; color:var(--muted);">${formatLabel} (${b.duration} мин)</div>
           </div>
           ${canCancel
             ? `<button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>`
@@ -679,12 +675,17 @@ async function cancelClientBooking(id, date, time) {
   async function loadClientDay() {
     const { data } = await db
       .from('bookings')
-      .select('start_time, duration')
+      .select('start_time, duration, is_split, type, client_tg_id')
       .eq('date', selectedDate);
 
     dayBookings = data || [];
     const allSlots = generateAllSlots();
-    const freeSlots = allSlots.filter(t => !isSlotOverlapping(t, CONFIG.WORKOUT_DURATION, dayBookings));
+    const freeSlots = allSlots.filter(t => {
+      // Не показываем слот, если клиент уже сам на него записан
+      const alreadyMine = dayBookings.some(b => b.start_time === t && Number(b.client_tg_id) === Number(currentUser.id));
+      if (alreadyMine) return false;
+      return !isSlotOverlapping(t, CONFIG.WORKOUT_DURATION, dayBookings);
+    });
 
     const grid = document.getElementById('client-slots');
     if (!freeSlots.length) {
@@ -692,24 +693,45 @@ async function cancelClientBooking(id, date, time) {
       return;
     }
 
-    grid.innerHTML = freeSlots.map(t => `
-      <button class="slot-btn" onclick="confirmClientBooking('${t}')">${t}</button>
-    `).join('');
+    grid.innerHTML = freeSlots.map(t => {
+      const hasSplit = dayBookings.some(b => b.start_time === t && b.is_split && b.type === 'workout');
+      return `
+        <button class="slot-btn" style="${hasSplit ? 'border-color: var(--green); color: var(--green);' : ''}" onclick="confirmClientBooking('${t}', ${hasSplit})">
+          ${t}${hasSplit ? '<div style="font-size:10px; font-weight:500;">сплит (1/2)</div>' : ''}
+        </button>`;
+    }).join('');
   }
 
-  function confirmClientBooking(time) {
+  function confirmClientBooking(time, isJoiningSplit) {
     const endTime = minToTime(timeToMin(time) + CONFIG.WORKOUT_DURATION);
-    openModal(`Запись на ${formatDateRu(selectedDate)}`, `
-      <p style="color:var(--muted); margin-bottom:16px;">
-        Подтвердить тренировку с <b>${time}</b> до <b>${endTime}</b>?
-      </p>
-      <button class="btn btn-primary" onclick="createClientBooking('${time}')">Записаться</button>
-    `);
+
+    if (isJoiningSplit) {
+      openModal(`Сплит на ${formatDateRu(selectedDate)}`, `
+        <p style="color:var(--muted); margin-bottom:16px;">
+          На время <b>${time} – ${endTime}</b> уже записан один человек, готовый заниматься в паре.<br><br>
+          Присоединиться к сплит-тренировке?
+        </p>
+        <button class="btn btn-success" onclick="createClientBooking('${time}', true)">Записаться на сплит</button>
+      `);
+    } else {
+      openModal(`Запись на ${formatDateRu(selectedDate)}`, `
+        <p style="color:var(--muted); margin-bottom:16px;">
+          Время: <b>${time} – ${endTime}</b>. Выберите формат тренировки:
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <button class="btn btn-primary" onclick="createClientBooking('${time}', false)">
+            Персональная (только я)
+          </button>
+          <button class="btn btn-secondary" style="border-color: var(--green); color: var(--green);" onclick="createClientBooking('${time}', true)">
+            Готов на сплит (можно вдвоём)
+          </button>
+        </div>
+      `);
+    }
   }
 
-  async function createClientBooking(time) {
-    // Повторная проверка перед записью на случай одновременного нажатия
-    const { data: fresh } = await db.from('bookings').select('start_time, duration').eq('date', selectedDate);
+  async function createClientBooking(time, isSplit) {
+    const { data: fresh } = await db.from('bookings').select('start_time, duration, is_split, type').eq('date', selectedDate);
     if (isSlotOverlapping(time, CONFIG.WORKOUT_DURATION, fresh || [])) {
       closeModal();
       alert('Это время только что заняли. Выберите другое.');
@@ -721,20 +743,22 @@ async function cancelClientBooking(id, date, time) {
       start_time: time,
       duration: CONFIG.WORKOUT_DURATION,
       client_tg_id: currentUser.id,
-      type: 'workout'
+      type: 'workout',
+      is_split: isSplit
     }).select('*, users(name, username)').single();
 
     if (error) return alert('Ошибка записи: ' + error.message);
 
+    const typeLabel = isSplit ? 'Сплит' : 'Тренировка';
     syncGoogleCalendar('create', {
       booking_id: inserted.id,
       date: selectedDate,
       start_time: time,
       duration: CONFIG.WORKOUT_DURATION,
-      title: `Тренировка: ${inserted.users?.name || 'Клиент'}`,
+      title: `${typeLabel}: ${inserted.users?.name || 'Клиент'}`,
       description: inserted.users?.username ? `@${inserted.users.username}` : '',
       notify_trainer: true,
-  client_name: inserted.users?.name || 'Клиент'
+      client_name: `${inserted.users?.name || 'Клиент'} (${isSplit ? 'сплит' : 'персональная'})`
     });
 
     closeModal();
@@ -752,7 +776,7 @@ async function cancelClientBooking(id, date, time) {
     if (tab === 'clients') loadClients();
   }
 
-  async function loadTrainerDay() {
+ async function loadTrainerDay() {
     const { data } = await db
       .from('bookings')
       .select('*, users(tg_id, name, username)')
@@ -764,31 +788,38 @@ async function cancelClientBooking(id, date, time) {
     const container = document.getElementById('trainer-slots-list');
 
     container.innerHTML = allSlots.map(time => {
-      const exactBooking = dayBookings.find(b => b.start_time === time);
+      const exactBookings = dayBookings.filter(b => b.start_time === time);
 
-      // 1. Слот — начало тренировки или личного времени
-      if (exactBooking) {
-        const endTime = minToTime(timeToMin(exactBooking.start_time) + exactBooking.duration);
-        if (exactBooking.type === 'workout') {
-          const clientName = escapeHtml(exactBooking.users?.name || 'Клиент');
-          const hasNote = exactBooking.notes && exactBooking.notes.trim().length > 0;
+      // 1. Слот — начало тренировки (одной или сплита) или личного времени
+      if (exactBookings.length > 0) {
+        const first = exactBookings[0];
+        const endTime = minToTime(timeToMin(first.start_time) + first.duration);
+
+        if (first.type === 'workout') {
+          const names = exactBookings.map(b => escapeHtml(b.users?.name || 'Клиент')).join(' + ');
+          const isSplit = exactBookings.some(b => b.is_split);
+          const subLabel = isSplit
+            ? `Сплит (${exactBookings.length}/2)`
+            : 'Персональная';
+          const hasNote = exactBookings.some(b => b.notes && b.notes.trim().length > 0);
+
           return `
-            <div class="trainer-slot workout" onclick="openWorkoutModal('${exactBooking.id}')">
+            <div class="trainer-slot workout" style="${isSplit ? 'border-left-color: var(--green);' : ''}" onclick="openWorkoutModal('${time}')">
               <div class="slot-time">${time}</div>
               <div class="slot-info">
-                <div class="slot-title">${clientName}</div>
-                <div class="slot-sub">${time} – ${endTime} • Тренировка</div>
+                <div class="slot-title">${names}</div>
+                <div class="slot-sub">${time} – ${endTime} • ${subLabel}</div>
                 ${hasNote ? `<div class="note-indicator">Есть заметка о тренировке</div>` : ''}
               </div>
               <span style="color:var(--muted);">›</span>
             </div>`;
         } else {
           return `
-            <div class="trainer-slot personal" onclick="openPersonalModal('${exactBooking.id}')">
+            <div class="trainer-slot personal" onclick="openPersonalModal('${first.id}')">
               <div class="slot-time">${time}</div>
               <div class="slot-info">
                 <div class="slot-title">Личное время</div>
-                <div class="slot-sub">${time} – ${endTime} ${exactBooking.notes ? '• ' + escapeHtml(exactBooking.notes) : ''}</div>
+                <div class="slot-sub">${time} – ${endTime} ${first.notes ? '• ' + escapeHtml(first.notes) : ''}</div>
               </div>
               <span style="color:var(--amber);">✕</span>
             </div>`;
@@ -801,9 +832,9 @@ async function cancelClientBooking(id, date, time) {
         const cur = timeToMin(time);
         return cur > s && cur < (s + b.duration);
       });
-      if (occupiedInside) return ''; // Не дублируем строку, так как выше уже показан интервал
+      if (occupiedInside) return '';
 
-      // 3. Свободен для 30 мин, но автоблокирован для часовой тренировки (например, 10:00 перед 10:30)
+      // 3. Свободен для 30 мин, но автоблокирован для часовой тренировки
       const blockedForHour = isSlotOverlapping(time, CONFIG.WORKOUT_DURATION, dayBookings);
       return `
         <div class="trainer-slot ${blockedForHour ? 'blocked-overlap' : ''}" onclick="openFreeSlotModal('${time}', ${blockedForHour})">
@@ -818,36 +849,43 @@ async function cancelClientBooking(id, date, time) {
     }).join('');
   }
 
-  // Модалка тренировки: связь с клиентом + заметка "что делали" + отмена
-  function openWorkoutModal(bookingId) {
-    const b = dayBookings.find(x => String(x.id) === String(bookingId));
-    if (!b) return;
+  function openWorkoutModal(slotTime) {
+    const list = dayBookings.filter(x => x.start_time === slotTime && x.type === 'workout');
+    if (!list.length) return;
 
-    const endTime = minToTime(timeToMin(b.start_time) + b.duration);
-    const contactUrl = getContactLink(b.users);
-    const clientName = escapeHtml(b.users?.name || 'Клиент');
+    const endTime = minToTime(timeToMin(slotTime) + list[0].duration);
+    const title = list.length > 1
+      ? `Сплит (${slotTime}–${endTime})`
+      : `${escapeHtml(list[0].users?.name || 'Клиент')} (${slotTime}–${endTime})`;
 
-    openModal(`${clientName} (${b.start_time}–${endTime})`, `
-      <a href="${contactUrl}" target="_blank" class="btn btn-primary" style="margin-bottom:14px;">
-        Написать клиенту в Telegram
-      </a>
+    const bodyHtml = list.map((b, idx) => {
+      const contactUrl = getContactLink(b.users);
+      const clientName = escapeHtml(b.users?.name || 'Клиент');
+      return `
+        <div style="${idx > 0 ? 'margin-top:18px; padding-top:18px; border-top:1px solid var(--border);' : ''}">
+          <div style="font-weight:700; margin-bottom:8px;">
+            ${clientName} ${b.is_split ? '<span style="font-size:11px; color:var(--green);">(Сплит)</span>' : ''}
+          </div>
+          <a href="${contactUrl}" target="_blank" class="btn btn-primary" style="margin-bottom:10px;">
+            Написать ${clientName} в Telegram
+          </a>
+          <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">
+            Что делали на тренировке:
+          </label>
+          <textarea id="workout-notes-${b.id}" placeholder="Упражнения, рабочие веса...">${escapeHtml(b.notes || '')}</textarea>
+          <div class="btn-row">
+            <button class="btn btn-sm btn-success" style="flex:1;" onclick="saveWorkoutNotes('${b.id}')">Сохранить заметку</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteBookingAsTrainer('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>
+          </div>
+        </div>
+      `;
+    }).join('');
 
-      <label style="display:block; font-size:13px; color:var(--muted); margin-bottom:6px;">
-        Что делали на тренировке:
-      </label>
-      <textarea id="workout-notes-input" placeholder="Упражнения, рабочие веса, самочувствие...">${escapeHtml(b.notes || '')}</textarea>
-
-      <div class="btn-row">
-        <button class="btn btn-success" onclick="saveWorkoutNotes('${b.id}')">Сохранить заметку</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-danger" onclick="deleteBookingAsTrainer('${b.id}', '${b.date}', '${b.start_time}')">Отменить запись</button>
-      </div>
-    `);
+    openModal(title, bodyHtml);
   }
 
-  async function saveWorkoutNotes(bookingId) {
-    const notes = document.getElementById('workout-notes-input').value.trim();
+ async function saveWorkoutNotes(bookingId) {
+    const notes = document.getElementById(`workout-notes-${bookingId}`).value.trim();
     const { error } = await db.from('bookings').update({ notes }).eq('id', bookingId);
     if (error) return alert('Ошибка сохранения: ' + error.message);
 
