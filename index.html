@@ -937,7 +937,87 @@ async function cancelClientBooking(id, date, time) {
     closeModal();
     await loadTrainerDay();
   }
+function openCloseFullDayModal() {
+    openModal(`Закрыть день (${formatDateRu(selectedDate)})`, `
+      <p style="color:var(--muted); font-size:13px; margin-bottom:12px;">
+        Все свободные окна на эту дату будут закрыты как личное время. Уже записанные клиенты останутся в расписании.
+      </p>
+      <label style="display:block; font-size:13px; color:var(--muted); margin-bottom:6px;">
+        Причина / комментарий (необязательно):
+      </label>
+      <input type="text" id="full-day-note-input" placeholder="Например: Выходной / Соревнования" />
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-amber" onclick="closeFullDay()">Подтвердить и закрыть день</button>
+      </div>
+    `);
+  }
 
+  async function closeFullDay() {
+    const notes = document.getElementById('full-day-note-input').value.trim();
+    const { data: fresh } = await db
+      .from('bookings')
+      .select('start_time, duration')
+      .eq('date', selectedDate);
+
+    const existing = fresh || [];
+    const allSlots = generateAllSlots();
+
+    // Находим все 30-минутные слоты, которые ещё ничем не заняты
+    const freeSlots = allSlots.filter(t => !isSlotOverlapping(t, CONFIG.STEP_MIN, existing));
+
+    if (!freeSlots.length) {
+      closeModal();
+      return alert('На этот день уже нет свободного времени.');
+    }
+
+    // Склеиваем соседние свободные слоты в цельные интервалы (чтобы не создавать 31 отдельное событие)
+    const blocks = [];
+    for (const slot of freeSlots) {
+      const slotMin = timeToMin(slot);
+      const last = blocks[blocks.length - 1];
+      if (last && last.endMin === slotMin) {
+        last.endMin += CONFIG.STEP_MIN;
+        last.duration += CONFIG.STEP_MIN;
+      } else {
+        blocks.push({
+          start_time: slot,
+          endMin: slotMin + CONFIG.STEP_MIN,
+          duration: CONFIG.STEP_MIN
+        });
+      }
+    }
+
+    const rowsToInsert = blocks.map(b => ({
+      date: selectedDate,
+      start_time: b.start_time,
+      duration: b.duration,
+      client_tg_id: null,
+      type: 'personal',
+      notes: notes || 'Выходной'
+    }));
+
+    const { data: insertedList, error } = await db
+      .from('bookings')
+      .insert(rowsToInsert)
+      .select();
+
+    if (error) return alert('Ошибка: ' + error.message);
+
+    // Синхронизируем каждый закрытый интервал с Google Календарём
+    (insertedList || []).forEach(item => {
+      syncGoogleCalendar('create', {
+        booking_id: item.id,
+        date: selectedDate,
+        start_time: item.start_time,
+        duration: item.duration,
+        title: notes ? `Личное: ${notes}` : 'Выходной / Личное время',
+        description: ''
+      });
+    });
+
+    closeModal();
+    await loadTrainerDay();
+  }
   function openPersonalModal(bookingId) {
     const b = dayBookings.find(x => String(x.id) === String(bookingId));
     if (!b) return;
