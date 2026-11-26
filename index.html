@@ -553,6 +553,11 @@
     });
 
     if (error) return alert('Ошибка отправки заявки: ' + error.message);
+    syncGoogleCalendar('new_client', {
+  name: name,
+  username: currentUser.username || '',
+  tg_id: currentUser.id
+});
     showView('view-pending');
   }
 
@@ -675,6 +680,8 @@
       duration: CONFIG.WORKOUT_DURATION,
       title: `Тренировка: ${inserted.users?.name || 'Клиент'}`,
       description: inserted.users?.username ? `@${inserted.users.username}` : ''
+      notify_trainer: true,
+  client_name: inserted.users?.name || 'Клиент'
     });
 
     closeModal();
@@ -684,8 +691,13 @@
   async function cancelClientBooking(id, date, time) {
     if (!confirm(`Отменить тренировку ${date} в ${time}?`)) return;
     await db.from('bookings').delete().eq('id', id);
-    syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
-    await Promise.all([loadClientDay(), loadClientUpcoming()]);
+    syncGoogleCalendar('delete', {
+  booking_id: id,
+  date,
+  start_time: time,
+  notify_trainer: true,
+  client_name: document.getElementById('client-name-badge').textContent || 'Клиент'
+});
   }
 
   // =========================================================================
