@@ -399,7 +399,7 @@
     SUPABASE_URL: 'https://ushyeyrssljsxbakzrsv.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHlleXJzc2xqc3hiYWt6cnN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU2ODIzMTksImV4cCI6MjExMTI1ODMxOX0._DwevMKXjQleh0jK7E3WzyRAA74s9dlj3cP1tEMP8zE',
     TRAINER_TG_ID: 506132216, // Ваш числовой Telegram ID (можно узнать у @userinfobot)
-
+    TRAINER_USERNAME: '@ku_nst'
     // Точка интеграции с Google Календарём (URL веб-приложения Google Apps Script).
     // Оставьте пустым, пока не настроите календарь — приложение будет работать без него.
     GCAL_WEBHOOK_URL: 'https://fitness.artem19890103.workers.dev',
@@ -689,7 +689,14 @@ async function cancelClientBooking(id, date, time) {
     await Promise.all([loadClientDay(), loadClientUpcoming()]);
   }
 
- async function loadClientUpcoming() {
+ function getTrainerChatLink() {
+    if (CONFIG.TRAINER_USERNAME && CONFIG.TRAINER_USERNAME.trim()) {
+      return `https://t.me/${CONFIG.TRAINER_USERNAME.trim().replace(/^@/, '')}`;
+    }
+    return `tg://user?id=${CONFIG.TRAINER_TG_ID}`;
+  }
+
+  async function loadClientUpcoming() {
     const today = formatDateLocal(new Date());
     const { data } = await db
       .from('bookings')
@@ -705,19 +712,41 @@ async function cancelClientBooking(id, date, time) {
       return;
     }
 
+    const trainerUrl = getTrainerChatLink();
+
     container.innerHTML = `<div class="section-title">Ваши записи</div>` + data.map(b => {
       const canCancel = canCancelBooking(b.date, b.start_time);
       const formatLabel = b.is_split ? 'Сплит-тренировка' : 'Персональная';
+
+      // Выделяем карточку контрастным цветом: зелёным для сплита, ярко-синим для персональной
+      const cardStyle = b.is_split
+        ? 'border: 1px solid rgba(34, 197, 94, 0.45); border-left: 4px solid var(--green); background: rgba(34, 197, 94, 0.08);'
+        : 'border: 1px solid rgba(59, 130, 246, 0.45); border-left: 4px solid var(--accent); background: rgba(59, 130, 246, 0.09);';
+
       return `
-        <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div>
-            <div style="font-weight:700;">${formatDateRu(b.date)} в ${b.start_time}</div>
-            <div style="font-size:12px; color:var(--muted);">${formatLabel} (${b.duration} мин)</div>
+        <div class="card" style="${cardStyle}">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div>
+              <div style="font-weight:700; font-size:15px; color:#fff;">${formatDateRu(b.date)} в ${b.start_time}</div>
+              <div style="font-size:12px; color:${b.is_split ? 'var(--green)' : '#93c5fd'}; font-weight:500; margin-top:2px;">
+                ${formatLabel} • ${b.duration} мин
+              </div>
+            </div>
+            ${!canCancel
+              ? `<span style="font-size:11px; color:var(--amber); text-align:right; line-height:1.3;">Отмена &lt;12ч<br>через тренера</span>`
+              : ''
+            }
           </div>
-          ${canCancel
-            ? `<button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>`
-            : `<span style="font-size:11px; color:var(--muted); text-align:right;">Отмена &lt;12ч<br>через тренера</span>`
-          }
+
+          <div class="btn-row" style="margin-top:12px;">
+            <a href="${trainerUrl}" target="_blank" class="btn btn-sm btn-primary" style="flex:1;">
+              Написать тренеру
+            </a>
+            ${canCancel
+              ? `<button class="btn btn-sm btn-danger" onclick="cancelClientBooking('${b.id}', '${b.date}', '${b.start_time}')">Отменить</button>`
+              : ''
+            }
+          </div>
         </div>
       `;
     }).join('');
