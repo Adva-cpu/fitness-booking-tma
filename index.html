@@ -737,14 +737,14 @@
     return diffHours >= 12;
   }
 
-  async function cancelClientBooking(id, date, time) {
+async function cancelClientBooking(id, date, time) {
     if (!canCancelBooking(date, time)) {
       alert('Отменить тренировку можно не позднее чем за 12 часов. Напишите тренеру напрямую.');
       return loadClientUpcoming();
     }
     if (!confirm(`Отменить тренировку ${formatDateRu(date)} в ${time}?`)) return;
 
-    syncGoogleCalendar('delete', {
+    await syncGoogleCalendar('delete', {
       booking_id: id,
       date,
       start_time: time,
