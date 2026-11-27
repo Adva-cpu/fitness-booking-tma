@@ -409,12 +409,13 @@
       <div class="section-title">Активные клиенты</div>
       <div id="approved-clients-list"></div>
     </div>
-  </div>
-</div>
-<!-- Вкладка: Все предстоящие записи -->
+
+    <!-- Вкладка: Все предстоящие записи -->
     <div id="trainer-all-bookings-tab" class="hidden">
       <div id="all-bookings-list"></div>
     </div>
+  </div>
+</div>
 <!-- Модальное окно -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -1408,8 +1409,14 @@ async function deleteBookingAsTrainer(id, date, time) {
       syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
     }
 
-    closeModal();
-    await loadTrainerDay();
+ closeModal();
+    await Promise.all([
+      loadTrainerDay(),
+      renderDatesStrip('trainer-dates', loadTrainerDay),
+      !document.getElementById('trainer-all-bookings-tab').classList.contains('hidden')
+        ? loadAllUpcomingBookings()
+        : Promise.resolve()
+    ]);
   }
   // =========================================================================
   // 9. УПРАВЛЕНИЕ КЛИЕНТАМИ (МОДЕРАЦИЯ И УДАЛЕНИЕ)
@@ -1525,24 +1532,24 @@ async function deleteBookingAsTrainer(id, date, time) {
 // =========================================================================
   // 11. АВТООБНОВЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ (SUPABASE REALTIME + ФОЛБЭК)
   // =========================================================================
-  function refreshCurrentView() {
+ function refreshCurrentView() {
     if (document.getElementById('modal-overlay').classList.contains('open')) return;
     if (!currentUser) return;
     if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
       loadTrainerDay();
       loadClients();
-    } else if (!document.getElementById('view-client').classList.contains('hidden')) {
-      loadClientDay();
-      loadClientUpcoming();
-    } else if (!document.getElementById('view-pending').classList.contains('hidden')) {
-      initApp(); // Если клиент ждёт одобрения — само откроет расписание, как только вы нажмёте «Одобрить»
-  if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
-      loadTrainerDay();
-      loadClients();
+      renderDatesStrip('trainer-dates', loadTrainerDay);
       if (!document.getElementById('trainer-all-bookings-tab').classList.contains('hidden')) {
         loadAllUpcomingBookings();
       }
+    } else if (!document.getElementById('view-client').classList.contains('hidden')) {
+      loadClientDay();
+      loadClientUpcoming();
+      renderDatesStrip('client-dates', loadClientDay);
+    } else if (!document.getElementById('view-pending').classList.contains('hidden')) {
+      initApp();
     }
+  }
 
   db.channel('live-updates')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refreshCurrentView)
