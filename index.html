@@ -50,10 +50,10 @@
       font-weight: 600;
     }
 
-    .tabs {
+  .tabs {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
       background: var(--card);
       padding: 4px;
       border-radius: 12px;
@@ -299,8 +299,8 @@
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Цели тренировок</label>
       <input type="text" id="reg-goals" placeholder="Похудение, набор массы, выносливость, спина..." style="margin-bottom:12px;" />
 
-      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Противопоказания / здоровье</label>
-      <input type="text" id="reg-contra" placeholder="Давление, сердце, грыжи, беременность или «нет»" style="margin-bottom:12px;" />
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Особенности здоровья</label>
+<input type="text" id="reg-contra" placeholder="Давление, сердце, грыжи, беременность или «нет»" style="margin-bottom:12px;" />
 
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Травмы и операции</label>
       <input type="text" id="reg-injuries" placeholder="Колени, плечо, поясница (когда были) или «нет»" style="margin-bottom:12px;" />
@@ -352,8 +352,9 @@
       <span class="role-badge">Тренер</span>
     </div>
 
-    <div class="tabs">
+   <div class="tabs">
       <button class="tab-btn active" id="tab-schedule" onclick="switchTrainerTab('schedule')">Расписание</button>
+      <button class="tab-btn" id="tab-all-bookings" onclick="switchTrainerTab('all-bookings')">Записи</button>
       <button class="tab-btn" id="tab-clients" onclick="switchTrainerTab('clients')">
         Клиенты <span id="pending-badge" class="badge hidden">0</span>
       </button>
@@ -379,7 +380,10 @@
     </div>
   </div>
 </div>
-
+<!-- Вкладка: Все предстоящие записи -->
+    <div id="trainer-all-bookings-tab" class="hidden">
+      <div id="all-bookings-list"></div>
+    </div>
 <!-- Модальное окно -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -848,14 +852,87 @@ async function cancelClientBooking(id, date, time) {
   // =========================================================================
   // 8. ЛОГИКА ТРЕНЕРА (РАСПИСАНИЕ, ЗАМЕТКИ, ЛИЧНОЕ ВРЕМЯ)
   // =========================================================================
-  function switchTrainerTab(tab) {
+ function switchTrainerTab(tab) {
     document.getElementById('tab-schedule').classList.toggle('active', tab === 'schedule');
+    document.getElementById('tab-all-bookings').classList.toggle('active', tab === 'all-bookings');
     document.getElementById('tab-clients').classList.toggle('active', tab === 'clients');
+
     document.getElementById('trainer-schedule-tab').classList.toggle('hidden', tab !== 'schedule');
+    document.getElementById('trainer-all-bookings-tab').classList.toggle('hidden', tab !== 'all-bookings');
     document.getElementById('trainer-clients-tab').classList.toggle('hidden', tab !== 'clients');
+
     if (tab === 'clients') loadClients();
+    if (tab === 'all-bookings') loadAllUpcomingBookings();
   }
 
+  async function loadAllUpcomingBookings() {
+    const today = formatDateLocal(new Date());
+    const { data, error } = await db
+      .from('bookings')
+      .select('*, users(tg_id, name, username, goals, contraindications, injuries, experience)')
+      .eq('type', 'workout')
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    const container = document.getElementById('all-bookings-list');
+    if (error || !data || !data.length) {
+      container.innerHTML = `<div style="color:var(--muted); font-size:14px; text-align:center; padding:24px 0;">Предстоящих записей пока нет</div>`;
+      return;
+    }
+
+    // Группируем записи по дате
+    const byDate = {};
+    data.forEach(b => {
+      if (!byDate[b.date]) byDate[b.date] = [];
+      byDate[b.date].push(b);
+    });
+
+    const daysRu = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+    container.innerHTML = Object.keys(byDate).map(dateIso => {
+      const [y, m, d] = dateIso.split('-').map(Number);
+      const dow = daysRu[new Date(y, m - 1, d).getDay()];
+      const list = byDate[dateIso];
+
+      // Склеиваем сплит-участников одного времени в одну строку
+      const byTime = {};
+      list.forEach(item => {
+        if (!byTime[item.start_time]) byTime[item.start_time] = [];
+        byTime[item.start_time].push(item);
+      });
+
+      const itemsHtml = Object.keys(byTime).map(time => {
+        const group = byTime[time];
+        const names = group.map(x => escapeHtml(x.users?.name || 'Клиент')).join(' + ');
+        const isSplit = group.some(x => x.is_split);
+        const subText = isSplit ? `Сплит (${group.length}/2)` : 'Персональная';
+
+        return `
+          <div class="trainer-slot workout" style="${isSplit ? 'border-left-color: var(--green);' : ''}" onclick="openBookingFromList('${dateIso}', '${time}')">
+            <div class="slot-time">${time}</div>
+            <div class="slot-info">
+              <div class="slot-title">${names}</div>
+              <div class="slot-sub">${subText}</div>
+            </div>
+            <span style="color:var(--muted);">›</span>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="section-title">${formatDateRu(dateIso)} (${dow})</div>
+        ${itemsHtml}
+      `;
+    }).join('');
+  }
+
+  async function openBookingFromList(dateIso, time) {
+    selectedDate = dateIso;
+    renderDatesStrip('trainer-dates', loadTrainerDay);
+    await loadTrainerDay();
+    openWorkoutModal(time);
+  }
  async function loadTrainerDay() {
     const { data } = await db
       .from('bookings')
@@ -933,7 +1010,7 @@ async function cancelClientBooking(id, date, time) {
     if (!u) return '';
     const rows = [
       { label: 'Цели', val: u.goals },
-      { label: 'Противопоказания', val: u.contraindications, warn: true },
+      { label: 'Особенности здоровья', val: u.contraindications, warn: true },
       { label: 'Травмы', val: u.injuries, warn: true },
       { label: 'Опыт', val: u.experience }
     ].filter(r => r.val && r.val.trim().length > 0);
@@ -1196,8 +1273,8 @@ async function deleteBookingAsTrainer(id, date, time) {
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Цели:</label>
       <input type="text" id="edit-goals" value="${escapeHtml(c.goals || '')}" style="margin-bottom:10px;" />
 
-      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Противопоказания:</label>
-      <input type="text" id="edit-contra" value="${escapeHtml(c.contraindications || '')}" style="margin-bottom:10px;" />
+      <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Особенности здоровья:</label>
+<input type="text" id="edit-contra" value="${escapeHtml(c.contraindications || '')}" style="margin-bottom:10px;" />
 
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:4px;">Травмы:</label>
       <input type="text" id="edit-injuries" value="${escapeHtml(c.injuries || '')}" style="margin-bottom:10px;" />
