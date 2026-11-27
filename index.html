@@ -1343,8 +1343,13 @@ async function deleteBookingAsTrainer(id, date, time) {
       loadClientUpcoming();
     } else if (!document.getElementById('view-pending').classList.contains('hidden')) {
       initApp(); // Если клиент ждёт одобрения — само откроет расписание, как только вы нажмёте «Одобрить»
+  if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
+      loadTrainerDay();
+      loadClients();
+      if (!document.getElementById('trainer-all-bookings-tab').classList.contains('hidden')) {
+        loadAllUpcomingBookings();
+      }
     }
-  }
 
   db.channel('live-updates')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, refreshCurrentView)
