@@ -50,7 +50,7 @@
       font-weight: 600;
     }
 
-  .tabs {
+    .tabs {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
@@ -64,15 +64,15 @@
       background: transparent;
       border: none;
       color: var(--muted);
-      padding: 10px;
+      padding: 10px 6px;
       border-radius: 9px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
     }
     .tab-btn.active { background: var(--accent); color: #fff; }
     .badge {
@@ -110,6 +110,25 @@
     .date-chip .dow { font-size: 11px; color: var(--muted); text-transform: uppercase; }
     .date-chip.active .dow { color: rgba(255,255,255,0.85); }
     .date-chip .day { font-size: 16px; font-weight: 700; margin-top: 2px; }
+
+    .date-dots {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 3px;
+      min-height: 6px;
+      margin-top: 4px;
+    }
+    .date-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .date-chip.active .date-dot { background: #fff; }
+    .date-dot.split { background: var(--green); }
+    .date-dot.off { background: var(--amber); }
+    .date-chip.no-slots { opacity: 0.4; }
 
     /* Карточки и списки */
     .card {
@@ -195,7 +214,7 @@
 
     .btn-row { display: flex; gap: 8px; margin-top: 10px; }
 
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -206,7 +225,7 @@
       font-family: inherit;
       outline: none;
     }
-    input:focus, textarea:focus { border-color: var(--accent); }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 95px; }
 
     /* Модальное окно */
@@ -266,37 +285,6 @@
       align-items: center;
       border-bottom: 1px solid var(--border);
     }
-    select {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-    }
-    select:focus { border-color: var(--accent); }
-
-    .date-dots {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 3px;
-      min-height: 6px;
-      margin-top: 4px;
-    }
-    .date-dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: var(--accent);
-    }
-    .date-chip.active .date-dot { background: #fff; }
-    .date-dot.split { background: var(--green); }
-    .date-dot.off { background: var(--amber); }
-    .date-chip.no-slots { opacity: 0.4; }
   </style>
 </head>
 <body>
@@ -316,7 +304,6 @@
   </div>
 
   <!-- Экран подачи заявки (новый клиент) -->
- <!-- Экран подачи заявки (новый клиент) -->
   <div id="view-register" class="hidden" style="padding: 20px 0;">
     <h2 style="font-size: 20px; margin-bottom: 6px;">Запись на тренировки</h2>
     <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
@@ -331,7 +318,7 @@
       <input type="text" id="reg-goals" placeholder="Похудение, набор массы, выносливость, спина..." style="margin-bottom:12px;" />
 
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Особенности здоровья</label>
-<input type="text" id="reg-contra" placeholder="Давление, сердце, грыжи, беременность или «нет»" style="margin-bottom:12px;" />
+      <input type="text" id="reg-contra" placeholder="Давление, сердце, грыжи, беременность или «нет»" style="margin-bottom:12px;" />
 
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:5px;">Травмы и операции</label>
       <input type="text" id="reg-injuries" placeholder="Колени, плечо, поясница (когда были) или «нет»" style="margin-bottom:12px;" />
@@ -352,7 +339,6 @@
     <button class="btn btn-secondary" onclick="initApp()">Проверить статус</button>
   </div>
 
-  <!-- Удалён / заблокирован -->
   <!-- Удалён / заблокирован -->
   <div id="view-deleted" class="center-screen hidden">
     <h2>Доступ ограничен</h2>
@@ -383,7 +369,7 @@
       <span class="role-badge">Тренер</span>
     </div>
 
-   <div class="tabs">
+    <div class="tabs">
       <button class="tab-btn active" id="tab-schedule" onclick="switchTrainerTab('schedule')">Расписание</button>
       <button class="tab-btn" id="tab-all-bookings" onclick="switchTrainerTab('all-bookings')">Записи</button>
       <button class="tab-btn" id="tab-clients" onclick="switchTrainerTab('clients')">
@@ -391,7 +377,6 @@
       </button>
     </div>
 
-    <!-- Вкладка: Расписание -->
     <!-- Вкладка: Расписание -->
     <div id="trainer-schedule-tab">
       <div class="dates-scroll" id="trainer-dates"></div>
@@ -416,6 +401,7 @@
     </div>
   </div>
 </div>
+
 <!-- Модальное окно -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -429,15 +415,13 @@
 
 <script>
   // =========================================================================
-  // 1. НАСТРОЙКИ (ЗАПОЛНИТЕ СВОИ ДАННЫЕ)
+  // 1. НАСТРОЙКИ
   // =========================================================================
   const CONFIG = {
     SUPABASE_URL: 'https://ushyeyrssljsxbakzrsv.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzaHlleXJzc2xqc3hiYWt6cnN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU2ODIzMTksImV4cCI6MjExMTI1ODMxOX0._DwevMKXjQleh0jK7E3WzyRAA74s9dlj3cP1tEMP8zE',
-    TRAINER_TG_ID: 1457299337, // Ваш числовой Telegram ID (можно узнать у @userinfobot)
+    TRAINER_TG_ID: 1457299337,
     TRAINER_USERNAME: '@ku_nst',
-    // Точка интеграции с Google Календарём (URL веб-приложения Google Apps Script).
-    // Оставьте пустым, пока не настроите календарь — приложение будет работать без него.
     GCAL_WEBHOOK_URL: 'https://fitness.artem19890103.workers.dev',
 
     WORK_START: '07:30',
@@ -464,12 +448,10 @@
   let dayBookings = [];
   let allClients = [];
 
-  // Определение пользователя (Telegram или тестовый режим в браузере)
   function getTgUser() {
     if (tg?.initDataUnsafe?.user) {
       return tg.initDataUnsafe.user;
     }
-    // Фолбэк для локального теста в браузере
     document.getElementById('dev-bar').classList.remove('hidden');
     const savedRole = localStorage.getItem('dev_role') || 'trainer';
     if (savedRole === 'trainer') {
@@ -492,12 +474,14 @@
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
+
   function formatDateRu(isoDate) {
     if (!isoDate) return '';
     const [y, m, d] = isoDate.split('-');
     return `${d}.${m}.${y}`;
   }
-function escapeHtml(str) {
+
+  function escapeHtml(str) {
     if (!str) return '';
     return String(str)
       .replace(/&/g, '&amp;')
@@ -508,9 +492,10 @@ function escapeHtml(str) {
 
   function getContactLink(user) {
     if (!user) return '#';
-    if (user.username) return `https://t.me/${user.username}`;
+    if (user.username) return `https://t.me/${user.username.replace(/^@/, '')}`;
     return `tg://user?id=${user.tg_id}`;
   }
+
   function timeToMin(t) {
     const [h, m] = t.split(':').map(Number);
     return h * 60 + m;
@@ -532,16 +517,13 @@ function escapeHtml(str) {
     return slots;
   }
 
-  // Проверка пересечения: если запись на 10:30 (60 мин -> 10:30-11:30),
-  // то кандидат на 10:00 (10:00-11:00) и 11:00 (11:00-12:00) вернут true (пересекается)
- function isSlotOverlapping(slotTime, durationMin, bookings) {
+  function isSlotOverlapping(slotTime, durationMin, bookings) {
     const candStart = timeToMin(slotTime);
     const candEnd = candStart + durationMin;
     const workEnd = timeToMin(CONFIG.WORK_END);
 
     if (candEnd > workEnd) return true;
 
-    // Если ровно на это время уже стоит 1 открытый сплит-клиент — слот доступен для второго
     const exactBookings = bookings.filter(b => b.start_time === slotTime);
     if (exactBookings.length === 1 && exactBookings[0].is_split && exactBookings[0].type === 'workout') {
       return false;
@@ -555,11 +537,10 @@ function escapeHtml(str) {
   }
 
   // =========================================================================
-  // 4. ФОНОВАЯ СИНХРОНИЗАЦИЯ С GOOGLE КАЛЕНДАРЁМ
+  // 4. СИНХРОНИЗАЦИЯ С GOOGLE КАЛЕНДАРЁМ И УВЕДОМЛЕНИЯ
   // =========================================================================
   function syncGoogleCalendar(action, payload) {
     if (!CONFIG.GCAL_WEBHOOK_URL) return;
-    // Отправляем в фоне (fire-and-forget), чтобы интерфейс не ждал ответа Google
     fetch(CONFIG.GCAL_WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -581,15 +562,16 @@ function escapeHtml(str) {
     showView('view-loading');
     currentUser = getTgUser();
 
-    // Проверка на роль тренера
     if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
       showView('view-trainer');
-      renderDatesStrip('trainer-dates', loadTrainerDay);
-      await Promise.all([loadTrainerDay(), loadClients()]);
+      await Promise.all([
+        renderDatesStrip('trainer-dates', loadTrainerDay),
+        loadTrainerDay(),
+        loadClients()
+      ]);
       return;
     }
 
-    // Проверка статуса клиента в базе
     const { data, error } = await db
       .from('users')
       .select('*')
@@ -611,12 +593,15 @@ function escapeHtml(str) {
     } else if (data.status === 'approved') {
       document.getElementById('client-name-badge').textContent = data.name;
       showView('view-client');
-      renderDatesStrip('client-dates', loadClientDay);
-      await Promise.all([loadClientDay(), loadClientUpcoming()]);
+      await Promise.all([
+        renderDatesStrip('client-dates', loadClientDay),
+        loadClientDay(),
+        loadClientUpcoming()
+      ]);
     }
   }
 
- async function submitRegistration() {
+  async function submitRegistration() {
     const name = document.getElementById('reg-name').value.trim();
     if (!name) return alert('Введите имя и фамилию');
 
@@ -649,6 +634,7 @@ function escapeHtml(str) {
     });
     showView('view-pending');
   }
+
   async function reapplyRegistration() {
     const name = [currentUser.first_name, currentUser.last_name].filter(Boolean).join(' ') || 'Клиент';
     const { error } = await db
@@ -701,7 +687,6 @@ function escapeHtml(str) {
       let dotsHtml = '<div class="date-dots"></div>';
 
       if (isTrainer) {
-        // Группируем тренировки по времени (сплит считаем за 1 занятие в сетке)
         const workoutTimes = new Set(dayItems.filter(b => b.type === 'workout').map(b => b.start_time));
         const hasFree = allSlots.some(t => !isSlotOverlapping(t, CONFIG.STEP_MIN, dayItems));
 
@@ -712,11 +697,9 @@ function escapeHtml(str) {
           }).join('');
           dotsHtml = `<div class="date-dots">${dots}</div>`;
         } else if (!hasFree && dayItems.length > 0) {
-          // Весь день закрыт как выходной
           dotsHtml = `<div class="date-dots"><span class="date-dot off"></span></div>`;
         }
       } else {
-        // Для клиента проверяем, есть ли хотя бы одно свободное окно на 60 мин
         const freeSlots = allSlots.filter(t => {
           const alreadyMine = dayItems.some(b => b.start_time === t && Number(b.client_tg_id) === Number(currentUser.id));
           if (alreadyMine) return false;
@@ -753,7 +736,8 @@ function escapeHtml(str) {
     const diffHours = (workoutDate - new Date()) / (1000 * 60 * 60);
     return diffHours >= 12;
   }
-async function cancelClientBooking(id, date, time) {
+
+  async function cancelClientBooking(id, date, time) {
     if (!canCancelBooking(date, time)) {
       alert('Отменить тренировку можно не позднее чем за 12 часов. Напишите тренеру напрямую.');
       return loadClientUpcoming();
@@ -776,7 +760,7 @@ async function cancelClientBooking(id, date, time) {
     ]);
   }
 
- function getTrainerChatLink() {
+  function getTrainerChatLink() {
     if (CONFIG.TRAINER_USERNAME && CONFIG.TRAINER_USERNAME.trim()) {
       return `https://t.me/${CONFIG.TRAINER_USERNAME.trim().replace(/^@/, '')}`;
     }
@@ -805,7 +789,6 @@ async function cancelClientBooking(id, date, time) {
       const canCancel = canCancelBooking(b.date, b.start_time);
       const formatLabel = b.is_split ? 'Сплит-тренировка' : 'Персональная';
 
-      // Выделяем карточку контрастным цветом: зелёным для сплита, ярко-синим для персональной
       const cardStyle = b.is_split
         ? 'border: 1px solid rgba(34, 197, 94, 0.45); border-left: 4px solid var(--green); background: rgba(34, 197, 94, 0.08);'
         : 'border: 1px solid rgba(59, 130, 246, 0.45); border-left: 4px solid var(--accent); background: rgba(59, 130, 246, 0.09);';
@@ -848,7 +831,6 @@ async function cancelClientBooking(id, date, time) {
     dayBookings = data || [];
     const allSlots = generateAllSlots();
     const freeSlots = allSlots.filter(t => {
-      // Не показываем слот, если клиент уже сам на него записан
       const alreadyMine = dayBookings.some(b => b.start_time === t && Number(b.client_tg_id) === Number(currentUser.id));
       if (alreadyMine) return false;
       return !isSlotOverlapping(t, CONFIG.WORKOUT_DURATION, dayBookings);
@@ -929,13 +911,17 @@ async function cancelClientBooking(id, date, time) {
     });
 
     closeModal();
-    await Promise.all([loadClientDay(), loadClientUpcoming()]);
+    await Promise.all([
+      loadClientDay(),
+      loadClientUpcoming(),
+      renderDatesStrip('client-dates', loadClientDay)
+    ]);
   }
 
   // =========================================================================
-  // 8. ЛОГИКА ТРЕНЕРА (РАСПИСАНИЕ, ЗАМЕТКИ, ЛИЧНОЕ ВРЕМЯ)
+  // 8. ЛОГИКА ТРЕНЕРА (РАСПИСАНИЕ, ЗАМЕТКИ, ЛИЧНОЕ ВРЕМЯ, ВСЕ ЗАПИСИ)
   // =========================================================================
- function switchTrainerTab(tab) {
+  function switchTrainerTab(tab) {
     document.getElementById('tab-schedule').classList.toggle('active', tab === 'schedule');
     document.getElementById('tab-all-bookings').classList.toggle('active', tab === 'all-bookings');
     document.getElementById('tab-clients').classList.toggle('active', tab === 'clients');
@@ -964,7 +950,6 @@ async function cancelClientBooking(id, date, time) {
       return;
     }
 
-    // Группируем записи по дате
     const byDate = {};
     data.forEach(b => {
       if (!byDate[b.date]) byDate[b.date] = [];
@@ -978,7 +963,6 @@ async function cancelClientBooking(id, date, time) {
       const dow = daysRu[new Date(y, m - 1, d).getDay()];
       const list = byDate[dateIso];
 
-      // Склеиваем сплит-участников одного времени в одну строку
       const byTime = {};
       list.forEach(item => {
         if (!byTime[item.start_time]) byTime[item.start_time] = [];
@@ -1012,11 +996,14 @@ async function cancelClientBooking(id, date, time) {
 
   async function openBookingFromList(dateIso, time) {
     selectedDate = dateIso;
-    renderDatesStrip('trainer-dates', loadTrainerDay);
-    await loadTrainerDay();
+    await Promise.all([
+      renderDatesStrip('trainer-dates', loadTrainerDay),
+      loadTrainerDay()
+    ]);
     openWorkoutModal(time);
   }
- async function loadTrainerDay() {
+
+  async function loadTrainerDay() {
     const { data } = await db
       .from('bookings')
       .select('*, users(tg_id, name, username, goals, contraindications, injuries, experience)')
@@ -1030,7 +1017,6 @@ async function cancelClientBooking(id, date, time) {
     container.innerHTML = allSlots.map(time => {
       const exactBookings = dayBookings.filter(b => b.start_time === time);
 
-      // 1. Слот — начало тренировки (одной или сплита) или личного времени
       if (exactBookings.length > 0) {
         const first = exactBookings[0];
         const endTime = minToTime(timeToMin(first.start_time) + first.duration);
@@ -1038,9 +1024,7 @@ async function cancelClientBooking(id, date, time) {
         if (first.type === 'workout') {
           const names = exactBookings.map(b => escapeHtml(b.users?.name || 'Клиент')).join(' + ');
           const isSplit = exactBookings.some(b => b.is_split);
-          const subLabel = isSplit
-            ? `Сплит (${exactBookings.length}/2)`
-            : 'Персональная';
+          const subLabel = isSplit ? `Сплит (${exactBookings.length}/2)` : 'Персональная';
           const hasNote = exactBookings.some(b => b.notes && b.notes.trim().length > 0);
 
           return `
@@ -1066,7 +1050,6 @@ async function cancelClientBooking(id, date, time) {
         }
       }
 
-      // 2. Слот занят продолжением предыдущей 60-минутной записи
       const occupiedInside = dayBookings.some(b => {
         const s = timeToMin(b.start_time);
         const cur = timeToMin(time);
@@ -1074,7 +1057,6 @@ async function cancelClientBooking(id, date, time) {
       });
       if (occupiedInside) return '';
 
-      // 3. Свободен для 30 мин, но автоблокирован для часовой тренировки
       const blockedForHour = isSlotOverlapping(time, CONFIG.WORKOUT_DURATION, dayBookings);
       return `
         <div class="trainer-slot ${blockedForHour ? 'blocked-overlap' : ''}" onclick="openFreeSlotModal('${time}', ${blockedForHour})">
@@ -1084,7 +1066,7 @@ async function cancelClientBooking(id, date, time) {
               ${blockedForHour ? 'Автоблок для клиентов (окно 30 мин)' : 'Свободно'}
             </div>
           </div>
-          <span style="font-size:12px; color:var(--muted);">+ Закрыть</span>
+          <span style="font-size:12px; color:var(--muted);">+ Открыть</span>
         </div>`;
     }).join('');
   }
@@ -1113,7 +1095,7 @@ async function cancelClientBooking(id, date, time) {
   }
 
   async function loadClientHistoryHtml(clientTgId, excludeBookingId = null) {
-    let query = db
+    const { data } = await db
       .from('bookings')
       .select('id, date, start_time, notes, is_split')
       .eq('client_tg_id', clientTgId)
@@ -1124,7 +1106,6 @@ async function cancelClientBooking(id, date, time) {
       .order('start_time', { ascending: false })
       .limit(6);
 
-    const { data } = await query;
     const items = (data || []).filter(x => String(x.id) !== String(excludeBookingId)).slice(0, 5);
 
     if (!items.length) {
@@ -1185,7 +1166,6 @@ async function cancelClientBooking(id, date, time) {
       `;
     }));
 
-    // Если это сплит с 1 свободным местом — даём тренеру добавить второго участника
     let addSecondHtml = '';
     if (list.length === 1 && list[0].is_split) {
       const options = getApprovedClientsOptionsHtml([Number(list[0].client_tg_id)]);
@@ -1204,7 +1184,8 @@ async function cancelClientBooking(id, date, time) {
 
     document.getElementById('modal-body').innerHTML = blocks.join('') + addSecondHtml;
   }
- async function saveWorkoutNotes(bookingId) {
+
+  async function saveWorkoutNotes(bookingId) {
     const notes = document.getElementById(`workout-notes-${bookingId}`).value.trim();
     const { error } = await db.from('bookings').update({ notes }).eq('id', bookingId);
     if (error) return alert('Ошибка сохранения: ' + error.message);
@@ -1214,8 +1195,7 @@ async function cancelClientBooking(id, date, time) {
     await loadTrainerDay();
   }
 
-  // Модалка закрытия слота под личное время
-function getApprovedClientsOptionsHtml(excludeTgIds = []) {
+  function getApprovedClientsOptionsHtml(excludeTgIds = []) {
     const available = allClients.filter(c => c.status === 'approved' && !excludeTgIds.includes(Number(c.tg_id)));
     if (!available.length) return '';
     return available.map(c => `<option value="${c.tg_id}">${escapeHtml(c.name)}</option>`).join('');
@@ -1311,9 +1291,13 @@ function getApprovedClientsOptionsHtml(excludeTgIds = []) {
     });
 
     closeModal();
-    await loadTrainerDay();
+    await Promise.all([
+      loadTrainerDay(),
+      renderDatesStrip('trainer-dates', loadTrainerDay)
+    ]);
   }
-function openCloseFullDayModal() {
+
+  function openCloseFullDayModal() {
     openModal(`Закрыть день (${formatDateRu(selectedDate)})`, `
       <p style="color:var(--muted); font-size:13px; margin-bottom:12px;">
         Все свободные окна на эту дату будут закрыты как личное время. Уже записанные клиенты останутся в расписании.
@@ -1337,8 +1321,6 @@ function openCloseFullDayModal() {
 
     const existing = fresh || [];
     const allSlots = generateAllSlots();
-
-    // Находим все 30-минутные слоты, которые ещё ничем не заняты
     const freeSlots = allSlots.filter(t => !isSlotOverlapping(t, CONFIG.STEP_MIN, existing));
 
     if (!freeSlots.length) {
@@ -1346,7 +1328,6 @@ function openCloseFullDayModal() {
       return alert('На этот день уже нет свободного времени.');
     }
 
-    // Склеиваем соседние свободные слоты в цельные интервалы (чтобы не создавать 31 отдельное событие)
     const blocks = [];
     for (const slot of freeSlots) {
       const slotMin = timeToMin(slot);
@@ -1379,7 +1360,6 @@ function openCloseFullDayModal() {
 
     if (error) return alert('Ошибка: ' + error.message);
 
-    // Синхронизируем каждый закрытый интервал с Google Календарём
     (insertedList || []).forEach(item => {
       syncGoogleCalendar('create', {
         booking_id: item.id,
@@ -1392,8 +1372,12 @@ function openCloseFullDayModal() {
     });
 
     closeModal();
-    await loadTrainerDay();
+    await Promise.all([
+      loadTrainerDay(),
+      renderDatesStrip('trainer-dates', loadTrainerDay)
+    ]);
   }
+
   function openPersonalModal(bookingId) {
     const b = dayBookings.find(x => String(x.id) === String(bookingId));
     if (!b) return;
@@ -1403,7 +1387,7 @@ function openCloseFullDayModal() {
     `);
   }
 
-async function deleteBookingAsTrainer(id, date, time) {
+  async function deleteBookingAsTrainer(id, date, time) {
     const booking = dayBookings.find(x => String(x.id) === String(id));
 
     if (booking && booking.type === 'workout' && booking.client_tg_id) {
@@ -1427,8 +1411,9 @@ async function deleteBookingAsTrainer(id, date, time) {
         : Promise.resolve()
     ]);
   }
+
   // =========================================================================
-  // 9. УПРАВЛЕНИЕ КЛИЕНТАМИ (МОДЕРАЦИЯ И УДАЛЕНИЕ)
+  // 9. УПРАВЛЕНИЕ КЛИЕНТАМИ (МОДЕРАЦИЯ, ИСТОРИЯ, АНКЕТА, УДАЛЕНИЕ)
   // =========================================================================
   async function loadClients() {
     const { data } = await db.from('users').select('*').order('created_at', { ascending: false });
@@ -1470,7 +1455,7 @@ async function deleteBookingAsTrainer(id, date, time) {
       : `<div style="color:var(--muted); font-size:13px;">Одобренных клиентов пока нет</div>`;
   }
 
- async function openEditAnketaModal(tgId) {
+  async function openEditAnketaModal(tgId) {
     const c = allClients.find(x => Number(x.tg_id) === Number(tgId));
     if (!c) return;
 
@@ -1538,12 +1523,14 @@ async function deleteBookingAsTrainer(id, date, time) {
       document.getElementById('modal-overlay').classList.remove('open');
     }
   }
-// =========================================================================
-  // 11. АВТООБНОВЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ (SUPABASE REALTIME + ФОЛБЭК)
+
   // =========================================================================
- function refreshCurrentView() {
+  // 11. АВТООБНОВЛЕНИЕ В РЕАЛЬНОМ ВРЕМЕНИ
+  // =========================================================================
+  function refreshCurrentView() {
     if (document.getElementById('modal-overlay').classList.contains('open')) return;
     if (!currentUser) return;
+
     if (Number(currentUser.id) === Number(CONFIG.TRAINER_TG_ID)) {
       loadTrainerDay();
       loadClients();
@@ -1565,11 +1552,11 @@ async function deleteBookingAsTrainer(id, date, time) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, refreshCurrentView)
     .subscribe();
 
-  // Страховочное тихое обновление раз в 15 секунд и при возврате в окно бота
   setInterval(refreshCurrentView, 15000);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshCurrentView();
   });
+
   initApp();
 </script>
 </body>
