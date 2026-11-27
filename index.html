@@ -759,7 +759,7 @@ async function cancelClientBooking(id, date, time) {
       return loadClientUpcoming();
     }
     if (!confirm(`Отменить тренировку ${formatDateRu(date)} в ${time}?`)) return;
-    await db.from('bookings').delete().eq('id', id);
+
     syncGoogleCalendar('delete', {
       booking_id: id,
       date,
@@ -768,6 +768,12 @@ async function cancelClientBooking(id, date, time) {
       client_name: document.getElementById('client-name-badge').textContent || 'Клиент'
     });
     await db.from('bookings').delete().eq('id', id);
+
+    await Promise.all([
+      loadClientDay(),
+      loadClientUpcoming(),
+      renderDatesStrip('client-dates', loadClientDay)
+    ]);
   }
 
  function getTrainerChatLink() {
@@ -1266,17 +1272,20 @@ function getApprovedClientsOptionsHtml(excludeTgIds = []) {
 
     if (error) return alert('Ошибка записи: ' + error.message);
 
-    // Уведомляем клиента, что тренер записал его на тренировку
     syncGoogleCalendar('trainer_booked', {
       booking_id: inserted.id,
       date: selectedDate,
       start_time: time,
       is_split: isSplit,
-      client_tg_id: clientTgId
+      client_tg_id: clientTgId,
+      client_name: inserted.users?.name || 'Клиент'
     });
 
     closeModal();
-    await Promise.all([loadTrainerDay(), renderDatesStrip('trainer-dates', loadTrainerDay)]);
+    await Promise.all([
+      loadTrainerDay(),
+      renderDatesStrip('trainer-dates', loadTrainerDay)
+    ]);
   }
 
   async function blockPersonalTime(time, duration) {
@@ -1396,7 +1405,6 @@ function openCloseFullDayModal() {
 
 async function deleteBookingAsTrainer(id, date, time) {
     const booking = dayBookings.find(x => String(x.id) === String(id));
-    await db.from('bookings').delete().eq('id', id);
 
     if (booking && booking.type === 'workout' && booking.client_tg_id) {
       syncGoogleCalendar('trainer_delete', {
@@ -1410,7 +1418,7 @@ async function deleteBookingAsTrainer(id, date, time) {
     }
     await db.from('bookings').delete().eq('id', id);
 
- closeModal();
+    closeModal();
     await Promise.all([
       loadTrainerDay(),
       renderDatesStrip('trainer-dates', loadTrainerDay),
