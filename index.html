@@ -1099,13 +1099,24 @@ function openCloseFullDayModal() {
     `);
   }
 
-  async function deleteBookingAsTrainer(id, date, time) {
+async function deleteBookingAsTrainer(id, date, time) {
+    const booking = dayBookings.find(x => String(x.id) === String(id));
     await db.from('bookings').delete().eq('id', id);
-    syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
+
+    if (booking && booking.type === 'workout' && booking.client_tg_id) {
+      syncGoogleCalendar('trainer_delete', {
+        booking_id: id,
+        date,
+        start_time: time,
+        client_tg_id: booking.client_tg_id
+      });
+    } else {
+      syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
+    }
+
     closeModal();
     await loadTrainerDay();
   }
-
   // =========================================================================
   // 9. УПРАВЛЕНИЕ КЛИЕНТАМИ (МОДЕРАЦИЯ И УДАЛЕНИЕ)
   // =========================================================================
