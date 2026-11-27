@@ -1400,7 +1400,7 @@
     } else {
       syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
     }
-    await db.from('bookings').delete().eq('id', id);
+  
 
     closeModal();
     await Promise.all([
