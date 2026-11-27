@@ -539,9 +539,9 @@
   // =========================================================================
   // 4. СИНХРОНИЗАЦИЯ С GOOGLE КАЛЕНДАРЁМ И УВЕДОМЛЕНИЯ
   // =========================================================================
-  function syncGoogleCalendar(action, payload) {
-    if (!CONFIG.GCAL_WEBHOOK_URL) return;
-    fetch(CONFIG.GCAL_WEBHOOK_URL, {
+ function syncGoogleCalendar(action, payload) {
+    if (!CONFIG.GCAL_WEBHOOK_URL) return Promise.resolve();
+    return fetch(CONFIG.GCAL_WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
@@ -1387,20 +1387,21 @@
     `);
   }
 
-  async function deleteBookingAsTrainer(id, date, time) {
+async function deleteBookingAsTrainer(id, date, time) {
     const booking = dayBookings.find(x => String(x.id) === String(id));
 
     if (booking && booking.type === 'workout' && booking.client_tg_id) {
-      syncGoogleCalendar('trainer_delete', {
+      await syncGoogleCalendar('trainer_delete', {
         booking_id: id,
         date,
         start_time: time,
         client_tg_id: booking.client_tg_id
       });
     } else {
-      syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
+      await syncGoogleCalendar('delete', { booking_id: id, date, start_time: time });
     }
-  
+
+    await db.from('bookings').delete().eq('id', id);
 
     closeModal();
     await Promise.all([
